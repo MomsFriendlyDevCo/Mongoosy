@@ -52,6 +52,19 @@ class Mongoosy extends mongoose.Mongoose {
 		// Create insert / insertOne aliases
 		model.insert = model.insertOne = model.create;
 
+		// Debugging enabled? Strap a debugging prefix onto all doc access methods
+		if (debug.enabled) {
+			['count', 'create', 'deleteMany', 'deleteOne', 'insert', 'insertOne', 'insertMany', 'updateMany', 'updateOne']
+				.forEach(method => {
+					var originalMethod = model[method];
+					model[method] = function(...args) {
+						debug(method, ...args);
+						debug(`mongoosy:${method}`, ...args);
+						return originalMethod.call(this, ...args);
+					};
+				});
+		}
+
 		this.models[id] = model;
 		return model.schema;
 	};

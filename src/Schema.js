@@ -4,13 +4,6 @@ var mongoose = require('mongoose');
 
 module.exports = class MongoosySchema extends mongoose.Schema {
 
-	constructor(id, schema) {
-		debug('Instanciate Schema', id);
-		super(id, schema);
-	};
-
-
-
 	/**
 	* Wrap the default virtual declaration so that we can accept an object definition or a simple getter only
 	* @param {string} field Field to setup the virtual on

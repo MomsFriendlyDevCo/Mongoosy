@@ -19,11 +19,13 @@ The Mongoose module but with some quality-of-life additions:
 [ ] Works with the MongoSh shell command
 [ ] Programmable field surpression (use `filter` method per field
 [ ] Automatic field surpression (fields prefixed with '_')
-[ ] `DEBUG` env variable compatibility
+[x] `DEBUG` env variable compatibility
 
 
 Differences from Mongoose
 =========================
+For the most part this module is a tiny wrapper around standard Mongoose but some additional quality-of-life fixes have been applied.
+
 
 Sane connection defaults
 ------------------------
@@ -33,7 +35,42 @@ Configuring the initial connection options in Mongoose can be a pain. Mongoosy s
 ObjectIds are always strings
 ----------------------------
 Mongoose makes comparing ObjectIds painful - always having to remember that while they look like strings they are actually objects and object comparison in JavaScript is unreliable.
-To make life easier all ObjectIds fetched from the database are _always_ strings which get converted back to the correct BSON type on save.
+To make life easier, all ObjectIds fetched from the database are _always_ simple strings which get converted back to the correct BSON type on save.
+
+```javascript
+Promise.all([
+	mongoosy.models.users.findOne({name: 'Adam'}),
+	mongoosy.models.users.findOne({role: 'admin'}),
+]).then(([adam, admin]) => {
+	console.log(
+		adam._id == admin._id // Simple string comparison
+			? 'Adam is admin'
+			: 'Adam is not admin'
+	);
+})
+```
+
+
+Easier debugging
+----------------
+Mongoosy uses wraps all data read/write functions in the [debug NPM module](https://github.com/visionmedia/debug) for debugging.
+
+To enable debugging set the environment variable to `DEBUG=mongoosy` for all debugging, `DEBUG=mongoosy:METHOD` for a specific method or combine globs as needed.
+
+For example:
+
+```
+# Execute myFile.js showing all debugging (can be very loud)
+DEBUG=mongoosy node myFile.js
+
+# Execute myFile.js showing all updateOne calls
+DEBUG=mongoosy:updateOne node myFile.js
+
+# Execute myFile.js showing insert and delete calls
+DEBUG=mongoosy:insert*,mongoosy:delete* node myFile.js
+```
+
+Note that enabling the debugging mode adds a small overhead to all model methods.
 
 
 Models have extra alias functions
@@ -45,8 +82,8 @@ Models have the following additional aliased functions:
 
 Pointer schema type
 -------------------
-Pointers are really just one record in Mongoose pointing at another.
-The pointer schema type is really just an ObjectId by default but it doesn't differenciate on storage methods (i.e. it can be an ObjectId but can be easily extended to storing UUIDs or some other item).
+Pointers are really just one Mongo document pointing at another.
+The pointer schema type is actually just an ObjectId by default but it doesn't differenciate on storage methods (i.e. it can be an ObjectId but can be easily extended to storing UUIDs or some other item).
 
 
 Schema virtuals are chainable
