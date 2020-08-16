@@ -1,0 +1,33 @@
+{
+  "name": "@momsfriendlydevco/mongoosy",
+  "version": "0.0.0",
+  "description": "Wrapper for Mongoose that adds some additional functionality",
+  "main": "src/mongoosy.js",
+  "repository": {
+    "type": "git",
+    "url": "git://github.com/MomsFriendlyDevCo/Mongoosy.git"
+  },
+  "scripts": {
+    "test": "mocha"
+  },
+  "keywords": [
+    "mongo",
+    "mongoose",
+    "database",
+    "nosql"
+  ],
+  "author": "Matt Carter <m@ttcarter.com>",
+  "license": "MIT",
+  "bugs": {
+    "url": "https://github.com/MomsFriendlyDevCo/Mongoosy/issues"
+  },
+  "homepage": "https://github.com/MomsFriendlyDevCo/Mongoosy",
+  "dependencies": {
+    "lodash": "^4.17.20",
+    "mongoose": "^5.10.0"
+  },
+  "devDependencies": {
+    "chai": "^4.2.0",
+    "mocha": "^8.1.1"
+  }
+}
