@@ -37,6 +37,11 @@ Configuring the initial connection options in Mongoose can be a pain. Mongoosy s
 **NOTE:** `mongoosy.connect()` and `mongoosy.compileModels()` need to be called seperately. This is so calls to schema construction can be buffered with additional hooks and virtuals declared before the entire schema structure is ready to compile.
 
 
+Version incrementing
+--------------------
+All documents have the meta `__v` property which now gets automatically incremented on each save.
+
+
 ObjectIds are always strings
 ----------------------------
 Mongoose makes comparing ObjectIds painful - always having to remember that while they look like strings they are actually objects and object comparison in JavaScript is unreliable.
