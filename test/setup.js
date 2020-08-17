@@ -5,9 +5,7 @@ var settings = {
 	uri: 'mongodb://localhost/mongoosy',
 };
 
-before(()=> mongoosy.connect(settings.uri), 'connect to test database');
-
-after(()=> mongoosy.disconnect(), 'disconnect');
+before('connect to test database', ()=> mongoosy.connect(settings.uri));
 
 // Setup schemas {{{
 before('setup schemas', ()=> {
@@ -66,6 +64,10 @@ before('setup schemas', ()=> {
 });
 // }}}
 
+before('compile models', ()=> mongoosy.compileModels());
+
 // Import scenario data {{{
 before('setup scenario data', ()=> mongoosy.scenario(require('./data/scenario')));
 // }}}
+
+after('disconnect', ()=> mongoosy.disconnect());

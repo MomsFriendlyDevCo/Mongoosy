@@ -33,6 +33,8 @@ Sane connection defaults
 ------------------------
 Configuring the initial connection options in Mongoose can be a pain. Mongoosy ships with all the latest Mongoose switches tuned to their correct values, preventing any depreciation warnings.
 
+**NOTE:** `mongoosy.connect()` and `mongoosy.compileModels()` need to be called seperately. This is so calls to schema construction can be buffered with additional hooks and virtuals declared before the entire schema structure is ready to compile.
+
 
 ObjectIds are always strings
 ----------------------------
@@ -220,6 +222,7 @@ Migration
 =========
 When migrating from Monoxide to Mongoose there are a few minor things to remember:
 
+* An additional `mongoosy.compileModels()` call is needed post-connection + post-schema loading to ready the models
 * Scenarios now use `$` as the ID field (formally: `_ref`), they also require all ID lookup fields to have a dollar prefix and the ID to match (including the prefix)
 * Queries returning no documents no longer automatically fail if `$errNoDocs` is set, use `query.orFail()` instead
 * `model.use()` -> `model.plugin()`

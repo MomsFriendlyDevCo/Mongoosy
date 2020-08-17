@@ -5,6 +5,20 @@ var mongoose = require('mongoose');
 module.exports = class MongoosySchema extends mongoose.Schema {
 
 	/**
+	* Parent Mongoosy instance
+	* @type {Mongoosy}
+	*/
+	mongoosy = undefined;
+
+
+	/**
+	* ID of this schema
+	* @type {string}
+	*/
+	id = undefined;
+
+
+	/**
 	* Wrap the default virtual declaration so that we can accept an object definition or a simple getter only
 	* @param {string} field Field to setup the virtual on
 	* @param {function|object} getter Either an object of the form `{get: Function, set:Function}` or the getter worker for a virtual
@@ -22,6 +36,16 @@ module.exports = class MongoosySchema extends mongoose.Schema {
 		} else {
 			return super.virtual(field, getter);
 		}
+	};
+
+
+	/**
+	* Force compile the model now
+	* This effectiyly fires compileTemplates() immediately on this one model
+	* This is only really useful if models are declared late in the load order
+	*/
+	compile() {
+		this.mongoosy.compileModels(this.id);
 	};
 
 }

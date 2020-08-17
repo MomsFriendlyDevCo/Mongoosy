@@ -16,6 +16,8 @@ class Mongoosy extends mongoose.Mongoose {
 		eventer.extend(this);
 
 		require('./Rest')(this);
+		require('./Model')(this);
+		// require('./versioning')(this);
 	};
 
 
@@ -27,7 +29,16 @@ class Mongoosy extends mongoose.Mongoose {
 
 
 	/**
+	* Declared model schemas
+	* These are compiled into models when compileModels() is called
+	* @type {Object<MongoosySchema>}
+	*/
+	schemas = {};
+
+
+	/**
 	* Storage for all models loaded as schemas in this instance of Mongoosy
+	* @type {<Object>MongooseModel} Populated from schemas when compileModels is called
 	*/
 	models = {};
 
@@ -53,53 +64,43 @@ class Mongoosy extends mongoose.Mongoose {
 
 
 	/**
-	* Similar to the `mongoose.model(id, schema)` declaration but this method constructs the model and returns the SCHEMA not the MODEL
-	* This allos easy chaining for setup methods like `.method()`, `.virtual()` etc.
+	* Compile all pending schemas into models
+	* This has to be done when all the virtuals / hooks / event sequencing has taken place so its seperated from connect()
+	* @param {string|array<string>} [ids] Optional ID or array of IDs to limit to
+	* @returns {Promise<Object>} A promise which will resolve with all available models post-compile
+	*
+	* @emits schema Emitted as `(schemaInstance)` - Event listeners may decorate the schema object prior to compilation into a model
+	* @emits model Emitted as `(modelInstance)` - Event listeners may decorate the compiled model after its ready
+	*/
+	compileModels(ids) {
+		if (_.isEmpty(this.schemas)) throw new Error('Call to compileModels() when no schemas have been declared');
+
+		return Promise.all(Object.keys(this.schemas)
+			.filter(id => !ids || _.castArray(ids).includes(id))
+			.map(id => Promise.resolve()
+				.then(()=> this.emit('model', this.schemas[id]))
+				.then(()=> this.models[id] = super.model(id, this.schemas[id]))
+				.then(()=> this.emit('model', this.models[id]))
+			)
+		)
+		.then(()=> this.models)
+	};
+
+
+
+	/**
+	* Similar to the `mongoose.model(id, schema)` declaration but this method prepares the schema and doesn't compile it until compileModels() is called
+	* This is so we can keep specifying hooks, virtuals etc. and compile the models when we're ready
+	* This allows easy chaining for setup methods like `.method()`, `.virtual()` etc.
 	* @param {string} id The name of the model to create, this is automatically lowercased + pluralised
 	* @param {Object|mongoose.Schema} schema The schema to construct, if this is a plain JS object it is constructed into a schema instance first
-	* @returns {MongooseModel} The created Mongoose model, also available via mongoosy.model[name]
-	*
-	* @emits model Emitted as `(modelInstance)` whenever a new model is declared
+	* @returns {MongooseSchema} The created Mongoose schema, also available via mongoosy.model[name]
 	*/
 	schema(id, schema) {
-		var compiledSchema = new Schema(schema);
-		var model = super.model(id, compiledSchema);
-
-		// Create insert / insertOne aliases
-		model.insert = model.insertOne = model.create;
-
-
-		// Plugin should be available even after compiling the model
-		model.plugin = (func, options) => {
-			func(model, options);
-			return model;
-		};
-
-
-		// Glue a virtual method which really redirects to the schema
-		model.virtual = (...args) => {
-			compiledSchema.virtual(...args);
-			return model;
-		};
-
-
-		// Debugging enabled? Strap a debugging prefix onto all doc access methods
-		if (debug.enabled || process.env.DEBUG) {
-			['count', 'create', 'deleteMany', 'deleteOne', 'insert', 'insertOne', 'insertMany', 'updateMany', 'updateOne']
-				.forEach(method => {
-					var originalMethod = model[method];
-					model[method] = function(...args) {
-						debug(method, ...args);
-						Debug(`mongoosy:${method}`)(...args);
-						return originalMethod.call(this, ...args);
-					};
-				});
-		}
-
-		this.models[id] = model;
-		this.emit('model', model);
-
-		return model.schema;
+		this.schemas[id] = new Schema(schema);
+		this.schemas[id].id = id;
+		this.schemas[id].mongoosy = this;
+		return this.schemas[id];
 	};
 
 

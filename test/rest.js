@@ -31,7 +31,7 @@ describe('mongoosy.Rest', function() {
 			running_time_secs: 'number',
 			actors: ['string'],
 		},
-	}));
+	}).compile());
 
 	before('load movie data', function() {
 		this.timeout(30 * 1000);
