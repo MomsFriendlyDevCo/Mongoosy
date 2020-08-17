@@ -3,23 +3,22 @@
 The Mongoose module but with some quality-of-life additions:
 
 **Must haves:**
-[x] ObjectIds are automatically strings
-[x] ObjectIds are always convered back to OIDs when saving to the database
-[x] Schema types can be strings
-[ ] `meta()` compatibility
-[ ] Express ReST server
-[ ] Middleware compatibility
-[x] Connect with sane defaults
-[x] Pointer schema type
-[x] `model.insert()` / `model.insertOne()` (alias of `model.create()`)
+* [x] ObjectIds are automatically strings
+* [x] ObjectIds are always convered back to OIDs when saving to the database
+* [x] Schema types can be strings
+* [ ] `meta()` compatibility
+* [ ] Express ReST server
+* [ ] Middleware compatibility
+* [x] Connect with sane defaults
+* [x] Pointer schema type
+* [x] `model.insert()` / `model.insertOne()` (alias of `model.create()`)
 
 
 **Nice to haves:**
-
-[ ] Works with the MongoSh shell command
-[ ] Programmable field surpression (use `filter` method per field
-[ ] Automatic field surpression (fields prefixed with '_')
-[x] `DEBUG` env variable compatibility
+* [ ] Works with the MongoSh shell command
+* [ ] Programmable field surpression (use `filter` method per field
+* [ ] Automatic field surpression (fields prefixed with '_')
+* [x] `DEBUG` env variable compatibility
 
 
 Differences from Mongoose
