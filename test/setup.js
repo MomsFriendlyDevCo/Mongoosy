@@ -70,4 +70,6 @@ before('compile models', ()=> mongoosy.compileModels());
 before('setup scenario data', ()=> mongoosy.scenario(require('./data/scenario')));
 // }}}
 
+after('drop database', ()=> mongoosy.dropDatabase({$confirmDrop: true}));
+
 after('disconnect', ()=> mongoosy.disconnect());

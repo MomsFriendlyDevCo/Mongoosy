@@ -124,6 +124,18 @@ class Mongoosy extends mongoose.Mongoose {
 
 
 	/**
+	* Drop an entire database
+	* For obvious safety reasons this function requires an object parameter exactly matching `{$confirmDrop: true}`
+	* @param {object} confirmation Required confirmation object
+	* @returns {Promise} A promise which will resolve when the database has dropped
+	*/
+	dropDatabase(confirmation) {
+		if (!_.isEqual(confirmation, {$confirmDrop: true})) throw new Error('Refusing to drop database without exact confirmation object');
+		return this.connection.dropDatabase();
+	};
+
+
+	/**
 	* Various utilities
 	* @type {Object}
 	*/

@@ -133,6 +133,13 @@ Drops a single collection by name.
 Returns a promise which will resolve with a boolean true if a collection was dropped or false if the collection didn't exist anyway.
 
 
+mongoosy.dropDatabase(confirmation)
+-----------------------------------
+Drop an entire database allow with data, collections and indexes.
+Requires a confirmation object _exactly_ matching `{$confirmDrop: true}` for obvious reasons.
+Returns a promise which will resolve when the database has dropped.
+
+
 mongoosy.scenario(inputs, options)
 ----------------------------------
 Utility function to quickly load a JSON / JS file into a model.
