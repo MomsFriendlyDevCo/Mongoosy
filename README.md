@@ -105,6 +105,18 @@ mongoosy.schema('users')
 ```
 
 
+API
+===
+In addition to the default Mongoose methods this module also provides a few conveinence functions.
+
+
+mongoosy.dropCollection(name)
+-----------------------------
+Drops a single collection by name.
+Returns a promise which will resolve with a boolean true if a collection was dropped or false if the collection didn't exist anyway.
+
+
+
 Migration
 =========
 When migrating from Monoxide to Mongoose there are a few minor things to remember:

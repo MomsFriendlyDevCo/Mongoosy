@@ -70,6 +70,25 @@ class Mongoosy extends mongoose.Mongoose {
 		return model.schema;
 	};
 
+
+	/**
+	* Drop a collection by name from the database
+	* @param {string} name The name of the collection to drop
+	* @returns {boolean} A boolean true if the collection was actually dropped, false if it didn't exist anyway
+	*/
+	dropCollection(name) {
+		return Promise.resolve()
+			.then(()=> this.connection.db.collections())
+			.then(collections => collections
+				.filter(c => c.s.namespace.collection == name)
+			)
+			.then(collections => {
+				if (!collections.length) return false;
+				return collections[0].drop();
+			})
+			.then(()=> true);
+	};
+
 }
 
 module.exports = new Mongoosy();
