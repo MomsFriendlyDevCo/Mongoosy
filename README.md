@@ -12,6 +12,7 @@ The Mongoose module but with some quality-of-life additions:
 * [x] Connect with sane defaults
 * [x] Pointer schema type
 * [x] `model.insert()` / `model.insertOne()` (alias of `model.create()`)
+* [x] `mongoosy.scenario()`
 
 
 **Nice to haves:**
@@ -114,6 +115,42 @@ mongoosy.dropCollection(name)
 -----------------------------
 Drops a single collection by name.
 Returns a promise which will resolve with a boolean true if a collection was dropped or false if the collection didn't exist anyway.
+
+
+mongoosy.scenario(inputs, options)
+----------------------------------
+Utility function to quickly load a JSON / JS file into a model.
+Inputs can be a JS object(s) or a file glob (or array of globs) to process.
+
+This function acts similar to `insertMany()` with the following differences:
+
+* Models are specified as the top level object key with an array of documents as the value - thus you can import to multiple models at the same time
+* The special `$` key is accepted as an identifier for a document, the string value is used as the identifier - i.e. give this inserted document a temporary alias
+* Any string field starting with `$` should have the computed ID value of the named document inserted in place
+* Creation order is automatically calculated - documents with prerequisites are inserted in the correct order
+
+
+```javascript
+mongoosy.scenario({
+	companies: [
+		{
+			$: '$company.acme',
+			name: 'Acme Inc',
+		},
+	],
+	users: [
+		{
+			$: 'users.joe',
+			name: 'Joe Random',
+			company: '$company.acme', // <- The ID of the first company is inserted here
+		},
+	],
+
+});
+```
+
+In the above scenario the company is inserted first, its ID remembered and used to populate the `company` field of the user.
+
 
 
 

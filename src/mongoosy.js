@@ -16,6 +16,13 @@ class Mongoosy extends mongoose.Mongoose {
 
 
 	/**
+	* Scenario importer function
+	* @see Scenario.js
+	*/
+	scenario = require('./Scenario').bind(this, this);
+
+
+	/**
 	* Storage for all models loaded as schemas in this instance of Mongoosy
 	*/
 	models = {};
@@ -87,6 +94,15 @@ class Mongoosy extends mongoose.Mongoose {
 				return collections[0].drop();
 			})
 			.then(()=> true);
+	};
+
+
+	/**
+	* Various utilities
+	* @type {Object}
+	*/
+	utils = {
+		promiseAllLimit: require('./promise.allLimit'),
 	};
 
 }

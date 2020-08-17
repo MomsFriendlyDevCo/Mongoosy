@@ -23,6 +23,8 @@
   },
   "homepage": "https://github.com/MomsFriendlyDevCo/Mongoosy",
   "dependencies": {
+    "@momsfriendlydevco/eventer": "^1.5.1",
+    "globby": "^11.0.1",
     "lodash": "^4.17.20",
     "mongoose": "^5.10.0"
   },
