@@ -23,6 +23,9 @@ module.exports = function MongoosyRest(mongoosy, options) {
 		delete: false,
 		searchId: '_id',
 		errorHandler: (res, code, text) => res.status(code).send(text),
+		selectHidden: false,
+		forbidHidden: true,
+		neverHidden: ['_id', '__v'],
 		...options,
 	};
 
@@ -48,6 +51,9 @@ module.exports = function MongoosyRest(mongoosy, options) {
 	* @param {boolean|array <function>|function} [options.delete=false] Enable deleting of records or specify middleware(s) to execute beforehand
 	* @param {object|function <Promise>|function} [options.queryForce] Override the incomming req.query object with either a static object or an evaluated promise returns. Called as `(req)`
 	* @param {function <Promise>|function} [options.queryValidate] Validate an incomming query, similar to `queryForce`. Throw an error to reject. Called as `(req)`.
+	* @param {boolean} [selectHidden=false] Automatically surpress all output fields prefixed with '_'
+	* @param {boolean} [forbidHidden=true] Forbid the selection of fields prefixed with '_' if the field has `{select: false}`
+	* @param {array<string>} [neverHidden=['_id', '__v']] Array of items which are excluded from hiding
 	* @param {function} [options.errorHandler] How to handle errors, default is to use Expresses `res.status(code).send(text)` method. Called as (res, code, text)
 	*
 	* @example Create a simple ReST server of 'users' with default options
@@ -112,7 +118,9 @@ module.exports = function MongoosyRest(mongoosy, options) {
 				// }}}
 				// Query validation {{{
 				.then(()=> {
-					if (!settings.queryValidate || serverMethod == 'get' || serverMethod == 'save' || serverMethod == 'create'  || serverMethod == 'delete') return;
+					if (settings.forbidHidden && ['get', 'query'].includes(serverMethod) && req.query.select && req.query.select.split(/[\s\,]+/).some(f => !settings.neverHidden.includes(f) && f.startsWith('_'))) return Promise.reject('You are not allowed to select hidden database fields');
+
+					if (!settings.queryValidate || ['get', 'save', 'create', 'delete'].includes(serverMethod)) return;
 
 					return Promise.resolve(settings.queryValidate(req, res))
 				})
@@ -154,6 +162,16 @@ module.exports = function MongoosyRest(mongoosy, options) {
 						queryNoMeta: removeMetaParams(req.query),
 					});
 
+
+					/**
+					* Internal function used to map documents before outputting
+					* This has no function if settings.selectHidden is enabled, if not it hides all `_` prefixed fields
+					*/
+					var docMap = doc => {
+						if (settings.selectHidden) return doc.toObject(); // No rewrite needed
+						return _.pickBy(doc.toObject(), (v, k) => settings.neverHidden.includes(k) || !k.startsWith('_'));
+					};
+
 					switch (serverMethod) {
 						case 'count': return model.countDocuments(removeMetaParams(req.query))
 							.then(count => ({count}))
@@ -164,7 +182,7 @@ module.exports = function MongoosyRest(mongoosy, options) {
 							})
 							.select(req.query.select ? req.query.select.split(/[\s\,]+/).join(' ') : undefined)
 							.then(doc => {
-								if (doc) return doc;
+								if (doc) return docMap(doc);
 								res.sendStatus(404);
 								return;
 							})
@@ -175,6 +193,8 @@ module.exports = function MongoosyRest(mongoosy, options) {
 							.sort(req.query.sort)
 							.limit(parseInt(req.query.limit))
 							.skip(parseInt(req.query.skip))
+							.then(docs => docs.map(docMap))
+							.catch(e => console.log('ERR', e))
 							.catch(e => settings.errorHandler(res, 400, e))
 
 						case 'save': return model.findOneAndUpdate({

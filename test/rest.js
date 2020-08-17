@@ -52,6 +52,7 @@ describe('mongoosy.Rest', function() {
 			save: true,
 			delete: true,
 		}));
+		app.use('/api/users/:id?', mongoosy.models.users.serve());
 		server = app.listen(port, null, finish);
 	});
 	after(()=> server && server.close());
@@ -174,6 +175,24 @@ describe('mongoosy.Rest', function() {
 				});
 			})
 	);
+
+	it('should hide _password fields by default', ()=>
+		axios.get(`${url}/api/users`)
+			.then(res => {
+				expect(res.data).to.be.an('array');
+				res.data.forEach(user => {
+					expect(user).to.have.property('_id');
+					expect(user).to.have.property('__v');
+					expect(user).to.not.have.property('_password');
+				});
+			})
+	);
+
+	it('should throw when asked for hidden fields', function() {
+		axios.get(`${url}/api/users?select=_id,_password`)
+			.then(res => this.fail)
+			.catch(res => expect(res.response).to.have.property('status', 400))
+	});
 	// }}}
 
 });
