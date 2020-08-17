@@ -1,5 +1,6 @@
 var _ = require('lodash');
-var debug = require('debug')('mongoosy');
+var Debug = require('debug');
+var debug = Debug('mongoosy');
 var mongoose = require('mongoose');
 var Schema = require('./Schema');
 
@@ -53,13 +54,13 @@ class Mongoosy extends mongoose.Mongoose {
 		model.insert = model.insertOne = model.create;
 
 		// Debugging enabled? Strap a debugging prefix onto all doc access methods
-		if (debug.enabled) {
+		if (debug.enabled || process.env.DEBUG) {
 			['count', 'create', 'deleteMany', 'deleteOne', 'insert', 'insertOne', 'insertMany', 'updateMany', 'updateOne']
 				.forEach(method => {
 					var originalMethod = model[method];
 					model[method] = function(...args) {
 						debug(method, ...args);
-						debug(`mongoosy:${method}`, ...args);
+						Debug(`mongoosy:${method}`)(...args);
 						return originalMethod.call(this, ...args);
 					};
 				});
