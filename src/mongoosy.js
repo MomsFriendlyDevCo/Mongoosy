@@ -2,6 +2,7 @@ var _ = require('lodash');
 var Debug = require('debug');
 var debug = Debug('mongoosy');
 var mongoose = require('mongoose');
+var eventer = require('@momsfriendlydevco/eventer');
 var Schema = require('./Schema');
 
 require('./SchemaType.ObjectId');
@@ -12,6 +13,9 @@ class Mongoosy extends mongoose.Mongoose {
 	constructor() {
 		debug('Instanciate');
 		super();
+		eventer.extend(this);
+
+		require('./Rest')(this);
 	};
 
 
@@ -33,9 +37,10 @@ class Mongoosy extends mongoose.Mongoose {
 			uri: _.isString(uri) ? uri : options.uri,
 
 			// "depreciated feature" surpression - assume sane Mongoose connection options in all cases
+			useCreateIndex: true,
+			useFindAndModify: false,
 			useNewUrlParser: true,
 			useUnifiedTopology: true,
-			useCreateIndex: true,
 
 			// Inherit rest of options
 			...options,
@@ -52,6 +57,9 @@ class Mongoosy extends mongoose.Mongoose {
 	* This allos easy chaining for setup methods like `.method()`, `.virtual()` etc.
 	* @param {string} id The name of the model to create, this is automatically lowercased + pluralised
 	* @param {Object|mongoose.Schema} schema The schema to construct, if this is a plain JS object it is constructed into a schema instance first
+	* @returns {MongooseModel} The created Mongoose model, also available via mongoosy.model[name]
+	*
+	* @emits model Emitted as `(modelInstance)` whenever a new model is declared
 	*/
 	schema(id, schema) {
 		var compiledSchema = new Schema(schema);
@@ -59,6 +67,21 @@ class Mongoosy extends mongoose.Mongoose {
 
 		// Create insert / insertOne aliases
 		model.insert = model.insertOne = model.create;
+
+
+		// Plugin should be available even after compiling the model
+		model.plugin = (func, options) => {
+			func(model, options);
+			return model;
+		};
+
+
+		// Glue a virtual method which really redirects to the schema
+		model.virtual = (...args) => {
+			compiledSchema.virtual(...args);
+			return model;
+		};
+
 
 		// Debugging enabled? Strap a debugging prefix onto all doc access methods
 		if (debug.enabled || process.env.DEBUG) {
@@ -74,6 +97,8 @@ class Mongoosy extends mongoose.Mongoose {
 		}
 
 		this.models[id] = model;
+		this.emit('model', model);
+
 		return model.schema;
 	};
 

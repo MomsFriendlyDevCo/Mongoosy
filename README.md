@@ -7,12 +7,14 @@ The Mongoose module but with some quality-of-life additions:
 * [x] ObjectIds are always convered back to OIDs when saving to the database
 * [x] Schema types can be strings
 * [ ] `meta()` compatibility
-* [ ] Express ReST server
-* [ ] Middleware compatibility
+* [x] Express ReST server
+* [x] Middleware compatibility
 * [x] Connect with sane defaults
 * [x] Pointer schema type
 * [x] `model.insert()` / `model.insertOne()` (alias of `model.create()`)
 * [x] `mongoosy.scenario()`
+* [ ] Iterators
+* [ ] Search compatibility
 
 
 **Nice to haves:**
@@ -106,6 +108,18 @@ mongoosy.schema('users')
 ```
 
 
+Scenario support built in
+-------------------------
+Importing large datasets (with linked OIDs) is now supported as built-in functionality.
+See the `mongoosy.scenario()` function for details.
+
+
+ReST server support built in
+----------------------------
+Connecting a Mongoose collection to Express compatible middleware is now supported as built-in functionality.
+See the `mongoosy.models.MODEL.serve()` function for details.
+
+
 API
 ===
 In addition to the default Mongoose methods this module also provides a few conveinence functions.
@@ -152,10 +166,56 @@ mongoosy.scenario({
 In the above scenario the company is inserted first, its ID remembered and used to populate the `company` field of the user.
 
 
+mongoosy.models.MODEL.serve(options)
+------------------------------------
+Create a Express compatible middleware backend which functions as a ReST server.
+
+
+```javascript
+var app = express();
+app.use(bodyParser.json());
+app.use('/api/movies/:id?', mongoosy.models.movies.serve({
+	create: true,
+	get: true,
+	query: true,
+	count: true,
+	save: true,
+	delete: true,
+}));
+```
+
+The following options are supported:
+
+| Opition         | Type                 | Default   | Description                                                                                                         |
+|-----------------|----------------------|-----------|---------------------------------------------------------------------------------------------------------------------|
+| `param`         | `string`             | `"id"`    | Where to look in req.params for the document ID to get/update/delete                                                |
+| `countParam`    | `string`             | `"count"` | Special case URL suffix to identify that we are performating a count operation and not looking up an ID             |
+| `searchId`      | `string`             | `"_id"`   | What field to search by when fetching / updating / deleting documents                                               |
+| `get`           | See notes            | `true`    | Enable getting of records or specify middleware(s) to execute beforehand                                            |
+| `query`         | See notes            | `true`    | Enable querying of records or specify middleware(s) to execute beforehand                                           |
+| `count`         | See notes            | `true`    | Enable counting of records or specify middleware(s) to execute beforehand                                           |
+| `create`        | See notes            | `true`    | Enable creating of records or specify middleware(s) to execute beforehand                                           |
+| `save`          | See notes            | `true`    | Enable updating of records or specify middleware(s) to execute beforehand                                           |
+| `delete`        | See notes            | `true`    | Enable deleting of records or specify middleware(s) to execute beforehand                                           |
+| `queryForce`    | Promiseable function |           | Called as `(req)` to override `req.query` with either a static object or an evaluated promise. Called as `(req)`    |
+| `queryValidate` | Promiseable function |           | Validate an incomming query, similar to `queryForce`. Throw an error to reject. Called as `(req)`.                  |
+| `errorHandler`  | Function             | See code  | How to handle errors, default is to use Expresses `res.status(code).send(text)` method. Called as (res, code, text) |
+
+
+**Notes:**
+
+* The `get` / `query` / `count` / `create` / `save` / `delete` methods can be a simple boolean to enable / disable, an array of Express middleware functions or a single middleware function. Middleware are all called as `(req, res, next)` and can either call `next()` to accept the request or handle output via `res.send()`
+
+
+EVENT: model
+------------
+Emitted as `(modelInstance)` when a model is declared.
+Useful to extend the base model functionality when a new model appears.
 
 
 Migration
 =========
 When migrating from Monoxide to Mongoose there are a few minor things to remember:
 
-* No issues reported yet
+* Scenarios now use `$` as the ID field (formally: `_ref`), they also require all ID lookup fields to have a dollar prefix and the ID to match (including the prefix)
+* Queries returning no documents no longer automatically fail if `$errNoDocs` is set, use `query.orFail()` instead
