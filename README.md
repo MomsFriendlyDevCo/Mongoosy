@@ -22,6 +22,7 @@ The Mongoose module but with some quality-of-life additions:
 * [ ] Works with the MongoSh shell command
 * [x] Automatic field surpression (fields prefixed with '_')
 * [x] `DEBUG` env variable compatibility
+* [x] Version incrementing
 
 
 Differences from Mongoose

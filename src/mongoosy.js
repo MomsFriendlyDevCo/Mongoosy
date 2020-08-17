@@ -17,7 +17,7 @@ class Mongoosy extends mongoose.Mongoose {
 
 		require('./Rest')(this);
 		require('./Model')(this);
-		// require('./versioning')(this);
+		require('./versioning')(this);
 	};
 
 
@@ -78,7 +78,7 @@ class Mongoosy extends mongoose.Mongoose {
 		return Promise.all(Object.keys(this.schemas)
 			.filter(id => !ids || _.castArray(ids).includes(id))
 			.map(id => Promise.resolve()
-				.then(()=> this.emit('model', this.schemas[id]))
+				.then(()=> this.emit('schema', this.schemas[id]))
 				.then(()=> this.models[id] = super.model(id, this.schemas[id]))
 				.then(()=> this.emit('model', this.models[id]))
 			)
