@@ -45,7 +45,7 @@ module.exports = class MongoosySchema extends mongoose.Schema {
 	* This is only really useful if models are declared late in the load order
 	*/
 	compile() {
-		this.mongoosy.compileModels(this.id);
+		return this.mongoosy.compileModels(this.id);
 	};
 
 }
