@@ -17,7 +17,6 @@ class Mongoosy extends mongoose.Mongoose {
 
 		require('./Rest')(this);
 		require('./Model')(this);
-		require('./versioning')(this);
 	};
 
 

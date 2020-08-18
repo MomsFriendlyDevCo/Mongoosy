@@ -22,7 +22,6 @@ The Mongoose module but with some quality-of-life additions:
 * [ ] Works with the MongoSh shell command
 * [x] Automatic field surpression (fields prefixed with '_')
 * [x] `DEBUG` env variable compatibility
-* [x] Version incrementing
 
 
 Differences from Mongoose
@@ -35,11 +34,6 @@ Sane connection defaults
 Configuring the initial connection options in Mongoose can be a pain. Mongoosy ships with all the latest Mongoose switches tuned to their correct values, preventing any depreciation warnings.
 
 **NOTE:** `mongoosy.connect()` and `mongoosy.compileModels()` need to be called seperately. This is so calls to schema construction can be buffered with additional hooks and virtuals declared before the entire schema structure is ready to compile.
-
-
-Version incrementing
---------------------
-All documents have the meta `__v` property which now gets automatically incremented on each save.
 
 
 ObjectIds are always strings
