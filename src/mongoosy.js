@@ -3,10 +3,10 @@ var Debug = require('debug');
 var debug = Debug('mongoosy');
 var mongoose = require('mongoose');
 var eventer = require('@momsfriendlydevco/eventer');
-var Schema = require('./Schema');
+var Schema = require('./schema');
 
-require('./SchemaType.ObjectId');
-require('./SchemaType.Pointer');
+require('./schematype.objectid');
+require('./schematype.pointer');
 
 class Mongoosy extends mongoose.Mongoose {
 
@@ -15,8 +15,8 @@ class Mongoosy extends mongoose.Mongoose {
 		super();
 		eventer.extend(this);
 
-		require('./Rest')(this);
-		require('./Model')(this);
+		require('./rest')(this);
+		require('./model')(this);
 	};
 
 
@@ -24,7 +24,7 @@ class Mongoosy extends mongoose.Mongoose {
 	* Scenario importer function
 	* @see Scenario.js
 	*/
-	scenario = require('./Scenario').bind(this, this);
+	scenario = require('./scenario').bind(this, this);
 
 
 	/**
@@ -141,7 +141,7 @@ class Mongoosy extends mongoose.Mongoose {
 	* @type {Object}
 	*/
 	utils = {
-		promiseAllLimit: require('./promise.allLimit'),
+		promiseAllLimit: require('./promise.alllimit'),
 	};
 
 }
