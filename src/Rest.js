@@ -72,8 +72,12 @@ module.exports = function MongoosyRest(mongoosy, options) {
 		if (_.isString(model)) {
 			if (!mongoosy.models[model]) throw new Error(`Cannot create ReST middleware for non-existant model "${model}". Try declaring its schema first`);
 			model = mongoosy.models[model];
+		} else if (_.isObject(model)) {
+			// Pass
 		} else if (!model) {
-			if (!mongoosy.models[model]) throw new Error(`Cannot create ReST middleware for non-existant or empty object model`);
+			throw new Error('Unspecified model when creating ReST middleware');
+		} else {
+			throw new Error('Unspecified model type when creating ReST middleware');
 		}
 
 		var removeMetaParams = query => _.omit(query, ['limit', 'select', 'skip', 'sort']);
@@ -110,9 +114,14 @@ module.exports = function MongoosyRest(mongoosy, options) {
 
 					if (_.isFunction(settings.queryForce)) {
 						return Promise.resolve(settings.queryForce(req, res))
-							.then(newQuery => req.query = newQuery)
+							.then(newQuery => {
+								if (!newQuery) return debug('Dont clobber req.query from queryForce undefined return');
+								debug('Clobber req.query with replacement value from queryForce:', newQuery);
+								req.query = newQuery
+							})
 					} else if (_.isObject(settings.queryForce)) {
 						req.query = settings.queryForce;
+						debug('Clobber req.query with queryForce object:', req.query);
 					}
 				})
 				// }}}
@@ -194,7 +203,6 @@ module.exports = function MongoosyRest(mongoosy, options) {
 							.limit(parseInt(req.query.limit))
 							.skip(parseInt(req.query.skip))
 							.then(docs => docs.map(docMap))
-							.catch(e => console.log('ERR', e))
 							.catch(e => settings.errorHandler(res, 400, e))
 
 						case 'save': return model.findOneAndUpdate({
@@ -206,7 +214,6 @@ module.exports = function MongoosyRest(mongoosy, options) {
 									return settings.errorHandler(res, 404, e);
 								} else {
 									debug(`Failed to update document "${req.params[settings.param]}" - ${e.toString()}`);
-									console.log(e);
 									return settings.errorHandler(res, 400, e);
 								}
 							})
@@ -239,12 +246,12 @@ module.exports = function MongoosyRest(mongoosy, options) {
 	// mongoosy.serve {{{
 	/**
 	* Create a new Express compatible ReST server middleware
-	* @param {string|Mongoosymodel} model The model to bind to, or its name
+	* @param {string|MongoosyModel} model The model to bind to, or its name
 	* @param {Object} [options] Additional options to use, see the MongoosyRest for the full list of options
 	* @returns {MongoosyRest} A MongoosyRest express middleware factory
 	*/
 	mongoosy.serve = (model, options) =>
-		new mongoosy.Rest(mongoosy.models[model], options);
+		new mongoosy.Rest(model, options);
 	// }}}
 
 	// mongoosy.models.model.serve {{{

@@ -73,6 +73,7 @@ class Mongoosy extends mongoose.Mongoose {
 	* @emits model Emitted as `(modelInstance)` - Event listeners may decorate the compiled model after its ready
 	*/
 	compileModels(ids) {
+		debug('Compile models:', ids || Object.keys(this.schemas));
 		if (_.isEmpty(this.schemas)) throw new Error('Call to compileModels() when no schemas have been declared');
 
 		return Promise.all(Object.keys(this.schemas)
@@ -97,6 +98,7 @@ class Mongoosy extends mongoose.Mongoose {
 	* @returns {MongooseSchema} The created Mongoose schema, also available via mongoosy.model[name]
 	*/
 	schema(id, schema) {
+		debug('Declare schema', id);
 		this.schemas[id] = new Schema(schema);
 		this.schemas[id].id = id;
 		this.schemas[id].mongoosy = this;
