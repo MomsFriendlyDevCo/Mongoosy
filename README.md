@@ -90,6 +90,20 @@ Models have the following additional aliased functions:
 * `model.insert()` / `model.insertOne()` (alias of `model.create()`) - Bringing the syntax more into line with `model.updateOne` / `model.updateMany()`
 
 
+Meta 'change' event
+-------------------
+The [Mongo middleware functions](https://mongoosejs.com/docs/middleware.html) are a little annoying when trying to differenciate between new, saved and updated documents. Mongoosy implements a generic 'change' event which tracks all of these simultaniously with one binding:
+
+```javascript
+mongoosy.models.widgets.pre('change', function() {
+	var doc = this; // Context is the full document (pulled automatically even on partial queries)
+	doc.$isNew() // Returns if the doc is being created for the first time (in the case of 'create' calls)
+});
+```
+
+As with all middleware this function is async compatible and stackable.
+
+
 Pointer schema type
 -------------------
 Pointers are really just one Mongo document pointing at another.

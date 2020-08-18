@@ -48,4 +48,65 @@ module.exports = class MongoosySchema extends mongoose.Schema {
 		return this.mongoosy.compileModels(this.id);
 	};
 
+
+	/**
+	* Wrap the pre handler so that we can capture the meta 'change' event
+	* @see https://mongoosejs.com/docs/api/schema.html#schema_Schema-pre
+	* @param {string} hook Middleware function to trap
+	* @param {Object} [options] Additional options to pass
+	* @param {function} handler Handler function to attach
+	* @returns {MongoosySchema} Chainable schema object
+	*/
+	pre(hook, options, handler) {
+		if (hook == 'change') {
+			if (_.isFunction(options)) [options, handler] = [{}, options];
+
+			debug('pre change binding');
+			// Functions that are sane and pass the entire doc
+			this.pre('save', handler);
+			this.pre('updateOne', handler);
+
+			// Functions that only give us a query
+			var resolveDoc = query =>
+				this.mongoosy.models[this.id].findById(query._id)
+					.then(doc => handler.call(doc))
+			this.pre('update', resolveDoc);
+			this.pre('findOneAndUpdate', resolveDoc);
+			this.pre('updateMany', resolveDoc);
+		} else {
+			super.pre(hook, options, handler);
+		}
+		return this;
+	};
+
+
+	/**
+	* Wrap the post handler so that we can capture the meta 'change' event
+	* @see https://mongoosejs.com/docs/api/schema.html#schema_Schema-pre
+	* @param {string} hook Middleware function to trap
+	* @param {Object} [options] Additional options to pass
+	* @param {function} handler Handler function to attach
+	* @returns {MongoosySchema} Chainable schema object
+	*/
+	post(hook, options, handler) {
+		if (hook == 'change') {
+			if (_.isFunction(options)) [options, handler] = [{}, options];
+
+			debug('post change binding');
+			// Functions that are sane and pass the entire doc
+			this.post('save', handler);
+			this.post('updateOne', handler);
+
+			// Functions that only give us a query
+			var resolveDoc = query =>
+				this.mongoosy.models[this.id].findById(query._id)
+					.then(doc => handler.call(doc))
+			this.post('update', resolveDoc);
+			this.post('findOneAndUpdate', resolveDoc);
+			this.post('updateMany', resolveDoc);
+		} else {
+			super.post(hook, options, handler);
+		}
+		return this;
+	};
 }
