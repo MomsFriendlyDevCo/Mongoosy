@@ -66,7 +66,7 @@ module.exports = function MongoosyRest(mongoosy, options) {
 	*   delete: (req, res, next) => res.send('Are you sure you should be deleting that?'),
 	* ))
 	*/
-	mongoosy.Rest = function MongoosyRest(model, options) {
+	mongoosy.serve = function MongoosyServe(model, options) {
 		var settings = {...pluginSettings, ...options};
 
 		if (_.isString(model)) {
@@ -243,17 +243,6 @@ module.exports = function MongoosyRest(mongoosy, options) {
 	};
 	// }}}
 
-	// mongoosy.serve {{{
-	/**
-	* Create a new Express compatible ReST server middleware
-	* @param {string|MongoosyModel} model The model to bind to, or its name
-	* @param {Object} [options] Additional options to use, see the MongoosyRest for the full list of options
-	* @returns {MongoosyRest} A MongoosyRest express middleware factory
-	*/
-	mongoosy.serve = (model, options) =>
-		new mongoosy.Rest(model, options);
-	// }}}
-
 	// mongoosy.models.model.serve {{{
 	mongoosy.on('model', model => {
 		/**
@@ -261,8 +250,7 @@ module.exports = function MongoosyRest(mongoosy, options) {
 		* @param {Object} [options] Additional options to use, see the MongoosyRest for the full list of options
 		* @returns {MongoosyRest} A MongoosyRest express middleware factory
 		*/
-		model.serve = options =>
-			new mongoosy.Rest(model, options);
+		model.serve = options => mongoosy.serve(model, options);
 	});
 	// }}}
 };
