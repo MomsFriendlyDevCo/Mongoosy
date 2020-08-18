@@ -223,6 +223,7 @@ The following options are supported:
 **Notes:**
 
 * The `get` / `query` / `count` / `create` / `save` / `delete` methods can be a simple boolean to enable / disable, an array of Express middleware functions or a single middleware function. Middleware are all called as `(req, res, next)` and can either call `next()` to accept the request or handle output via `res.send()`
+* If `queryForce` is a function it is expected to either mutate `req.query` or return the new absolute contents of that object which is spliced in place. Any falsy return is ignored
 
 
 EVENT: model
@@ -242,3 +243,6 @@ When migrating from Monoxide to Mongoose there are a few minor things to remembe
 * Iterators now use the default [Mongoose cursor system](https://mongoosejs.com/docs/api/query.html#query_Query-cursor). Use the `Thing.find().cursor().map()` pattern instead of filter / map / forEach
 * Virtuals do not pass the document as the first parameter. Use `this` within the getter / setter function to recieve the current document
 * `model.hook()` is no longer supported. Use the [Mongoose pre/post methods instead](https://mongoosejs.com/docs/middleware.html#pre) - `model.pre('save', fn)` / `model.post('save', fn)` instead. `fn` is called as `(doc)` and will be waited on if its a promise.
+
+* Various safe shell replacements:
+	* `find -name '*.doop' -print0 | xargs -0 perl -pi -e 's/findOneByI[dD]/findById/g'`
