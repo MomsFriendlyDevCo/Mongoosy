@@ -189,6 +189,12 @@ mongoosy.scenario({
 In the above scenario the company is inserted first, its ID remembered and used to populate the `company` field of the user.
 
 
+mongoosy.serve(model, options)
+------------------------------
+Create a Express compatible middleware backend which functions as a ReST server.
+This is an alternate method to call `mongoosy.models.MODEL.serve(options)` with an explicit model.
+
+
 mongoosy.models.MODEL.serve(options)
 ------------------------------------
 Create a Express compatible middleware backend which functions as a ReST server.
@@ -238,6 +244,13 @@ EVENT: model
 ------------
 Emitted as `(modelInstance)` when a model is declared.
 Useful to extend the base model functionality when a new model appears.
+Note that event hooks cannot be bound at this stage. Trap the `schema` event and add hooks to that instead.
+
+
+EVENT: schema
+-------------
+Emitted as `(schemaInstance)` when a schema is declared.
+Useful to extend the schema functionality with hooks and other custom functionality.
 
 
 Migration
