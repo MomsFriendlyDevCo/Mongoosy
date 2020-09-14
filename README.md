@@ -239,6 +239,7 @@ When migrating from Monoxide to Mongoose there are a few minor things to remembe
 * Scenarios now use `$` as the ID field (formally: `_ref`), they also require all ID lookup fields to have a dollar prefix and the ID to match (including the prefix)
 * Queries returning no documents no longer automatically fail if `$errNoDocs` is set, use `query.orFail()` instead
 * `model.use()` -> `model.plugin()`
+* `model.findOneByID()` -> `model.findOne()`
 * Iterators now use the default [Mongoose cursor system](https://mongoosejs.com/docs/api/query.html#query_Query-cursor). Use the `Thing.find().cursor().map()` pattern instead of filter / map / forEach
 * Virtuals do not pass the document as the first parameter. Use `this` within the getter / setter function to recieve the current document
 * `model.hook()` is no longer supported. Use the [Mongoose pre/post methods instead](https://mongoosejs.com/docs/middleware.html#pre) - `model.pre('save', fn)` / `model.post('save', fn)` instead. `fn` is called as `(doc)` and will be waited on if its a promise.
