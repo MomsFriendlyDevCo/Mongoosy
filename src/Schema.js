@@ -1,5 +1,5 @@
 var _ = require('lodash');
-var debug = require('debug')('mongoosy');
+var debug = require('debug')('mongoosy:schema');
 var mongoose = require('mongoose');
 
 module.exports = class MongoosySchema extends mongoose.Schema {
