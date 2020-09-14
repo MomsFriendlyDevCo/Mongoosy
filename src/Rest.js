@@ -73,12 +73,13 @@ module.exports = function MongoosyRest(mongoosy, options) {
 			if (!mongoosy.models[model]) throw new Error(`Cannot create ReST middleware for non-existant model "${model}". Try declaring its schema first`);
 			model = mongoosy.models[model];
 		} else if (!model) {
+			// FIXME: But model is empty/falsy...
 			if (!mongoosy.models[model]) throw new Error(`Cannot create ReST middleware for non-existant or empty object model`);
 		}
 
 		var removeMetaParams = query => _.omit(query, ['limit', 'select', 'skip', 'sort']);
 
-		debug('Setup ReST middleware for model', model.name);
+		debug('Setup ReST middleware for model', model.modelName);
 		return (req, res) => {
 			var serverMethod;
 
@@ -197,6 +198,7 @@ module.exports = function MongoosyRest(mongoosy, options) {
 							.catch(e => console.log('ERR', e))
 							.catch(e => settings.errorHandler(res, 400, e))
 
+						// FIXME: Only returns the query rather than full updated document?
 						case 'save': return model.findOneAndUpdate({
 								[settings.searchId]: req.params[settings.param],
 							}, req.body, {new: true})
