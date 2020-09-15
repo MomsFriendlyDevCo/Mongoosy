@@ -208,7 +208,7 @@ module.exports = function MongoosyRest(mongoosy, options) {
 							.exec()
 							.then(doc => {
 								if (doc) return docMap(doc);
-								return settings.errorHandler(res, 400, 'Document not found when performing update');
+								return settings.errorHandler(res, 404, 'Document not found when performing update');
 							})
 							.catch(e => {
 								if (e == 'Document not found when performing update') {
