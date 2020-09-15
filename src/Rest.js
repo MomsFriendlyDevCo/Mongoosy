@@ -173,6 +173,7 @@ module.exports = function MongoosyRest(mongoosy, options) {
 						return _.pickBy(doc.toObject(), (v, k) => settings.neverHidden.includes(k) || !k.startsWith('_'));
 					};
 
+					// FIXME: Are there cases here which should call `exec()` instead of relying on a single `then`?
 					switch (serverMethod) {
 						case 'count': return model.countDocuments(removeMetaParams(req.query))
 							.then(count => ({count}))
@@ -198,10 +199,17 @@ module.exports = function MongoosyRest(mongoosy, options) {
 							.catch(e => console.log('ERR', e))
 							.catch(e => settings.errorHandler(res, 400, e))
 
-						// FIXME: Only returns the query rather than full updated document?
 						case 'save': return model.findOneAndUpdate({
 								[settings.searchId]: req.params[settings.param],
-							}, req.body, {new: true})
+							}, req.body, {
+								new: true,
+								strict: false // Allows saving of fields outside of schema
+							})
+							.exec()
+							.then(doc => {
+								if (doc) return docMap(doc);
+								return settings.errorHandler(res, 400, 'Document not found when performing update');
+							})
 							.catch(e => {
 								if (e == 'Document not found when performing update') {
 									debug(`Document ID "${req.params[settings.param]}" found when performing update`);
