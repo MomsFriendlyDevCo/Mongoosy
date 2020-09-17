@@ -96,8 +96,8 @@ class Mongoosy extends mongoose.Mongoose {
 	* @param {Object|mongoose.Schema} schema The schema to construct, if this is a plain JS object it is constructed into a schema instance first
 	* @returns {MongooseSchema} The created Mongoose schema, also available via mongoosy.model[name]
 	*/
-	schema(id, schema) {
-		this.schemas[id] = new Schema(schema);
+	schema(id, schema, options) {
+		this.schemas[id] = new Schema(schema, options);
 		this.schemas[id].id = id;
 		this.schemas[id].mongoosy = this;
 		return this.schemas[id];
