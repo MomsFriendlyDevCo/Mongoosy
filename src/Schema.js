@@ -29,13 +29,13 @@ module.exports = class MongoosySchema extends mongoose.Schema {
 		// Treat as object spec
 		if (_.isString(field) && _.isPlainObject(getter)) {
 			super.virtual(field, getter);
-			return this;
 		} else if (_.isString(field) && (_.isFunction(getter) || _.isFunction(setter))) {
-			super.virtual(field, {get: getter, set: setter});
-			return this;
+			if (_.isFunction(getter)) super.virtual(field).get(getter);
+			if (_.isFunction(setter)) super.virtual(field).set(setter);
 		} else {
-			return super.virtual(field, getter);
+			super.virtual(field, getter);
 		}
+		return this;
 	};
 
 
