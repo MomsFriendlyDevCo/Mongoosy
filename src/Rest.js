@@ -66,6 +66,7 @@ module.exports = function MongoosyRest(mongoosy, options) {
 	*   delete: (req, res, next) => res.send('Are you sure you should be deleting that?'),
 	* ))
 	*/
+	// FIXME: Same function name as above
 	mongoosy.Rest = function MongoosyRest(model, options) {
 		var settings = {...pluginSettings, ...options};
 
