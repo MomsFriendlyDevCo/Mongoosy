@@ -1,17 +1,14 @@
 module.exports = (mongoosy) => {
 	mongoosy.on('schema', schema => {
-		var applyVersioning = function(path) {
+		var hookFactory = function(path) {
 			return function() {
-				var target = Object.prototype.hasOwnProperty.call(this, path) ? this[path] : this;
+				var target = (path && Object.prototype.hasOwnProperty.call(this, path)) ? this[path] : this;
 				target.__v = 0 + target.__v + 1;
 			}
 		};
 
-
-		schema.pre('save', applyVersioning());
-		schema.pre('update', applyVersioning());
-		schema.pre('updateOne', applyVersioning());
-		schema.pre('updateMany', applyVersioning());
-		schema.pre('findOneAndUpdate', applyVersioning('_update'));
+		// TODO: Are others among these inside _update?
+		schema.pre(['save', 'update', 'updateOne', 'updateMany'], hookFactory());
+		schema.pre('findOneAndUpdate', hookFactory('_update'));
 	});
 };
