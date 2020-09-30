@@ -15,6 +15,7 @@ module.exports = function MongoosyRest(mongoosy, options) {
 	var pluginSettings = {
 		param: 'id',
 		countParam: 'count',
+		searchParam: 'q',
 		get: true,
 		query: true,
 		count: true,
@@ -43,6 +44,7 @@ module.exports = function MongoosyRest(mongoosy, options) {
 	* @param {Object} [options] Options object
 	* @param {string} [options.param="id"] Where to look in req.params for the document ID to get/update/delete
 	* @param {string} [options.countParam="count"] Special case URL suffix to identify that we are performating a count operation and not looking up an ID
+	* @param {string} [options.searchParam="q"] Special case URL querystring to identify that we are performating a search operation and not looking up an ID
 	* @param {string} [options.searchId="_id"] What field to search by when fetching / updating / deleting documents
 	* @param {boolean|array <function>|function} [options.get=true] Enable getting of records or specify middleware(s) to execute beforehand
 	* @param {boolean|array <function>|function} [options.query=true] Enable querying of records or specify middleware(s) to execute beforehand
@@ -93,8 +95,7 @@ module.exports = function MongoosyRest(mongoosy, options) {
 						serverMethod = 'count';
 					} else if (req.method == 'GET' && req.params[settings.param] != undefined) { // Get one document
 						serverMethod = 'get';
-					// FIXME: Will this override query in some cases?
-					} else if (model.search != undefined && req.method == 'GET' && req.query.q != undefined) { // Search documents (given a req.query.q)
+					} else if (model.search != undefined && req.method == 'GET' && req.query[settings.searchParam] != undefined) { // Search documents (given a search querystring)
 						serverMethod = 'search';
 					} else if (req.method == 'GET') { // List all documents (filtered via req.query)
 						serverMethod = 'query';
@@ -205,7 +206,7 @@ module.exports = function MongoosyRest(mongoosy, options) {
 							.catch(e => console.log('ERR', e))
 							.catch(e => settings.errorHandler(res, 400, e))
 
-						case 'search': return model.search(req.query.q)
+						case 'search': return model.search(req.query[settings.searchParam])
 							.then(docs => docs.map(docMap))
 							.catch(e => settings.errorHandler(res, 400, e))
 
