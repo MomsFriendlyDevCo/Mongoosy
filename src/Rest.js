@@ -18,6 +18,7 @@ module.exports = function MongoosyRest(mongoosy, options) {
 		get: true,
 		query: true,
 		count: true,
+		search: false,
 		create: false,
 		save: false,
 		delete: false,
@@ -46,6 +47,7 @@ module.exports = function MongoosyRest(mongoosy, options) {
 	* @param {boolean|array <function>|function} [options.get=true] Enable getting of records or specify middleware(s) to execute beforehand
 	* @param {boolean|array <function>|function} [options.query=true] Enable querying of records or specify middleware(s) to execute beforehand
 	* @param {boolean|array <function>|function} [options.count=true] Enable counting of records or specify middleware(s) to execute beforehand
+	* @param {boolean|array <function>|function} [options.search=false] Enable searching of records or specify middleware(s) to execute beforehand
 	* @param {boolean|array <function>|function} [options.create=false] Enable creating of records or specify middleware(s) to execute beforehand
 	* @param {boolean|array <function>|function} [options.save=false] Enable updating of records or specify middleware(s) to execute beforehand
 	* @param {boolean|array <function>|function} [options.delete=false] Enable deleting of records or specify middleware(s) to execute beforehand
@@ -91,6 +93,9 @@ module.exports = function MongoosyRest(mongoosy, options) {
 						serverMethod = 'count';
 					} else if (req.method == 'GET' && req.params[settings.param] != undefined) { // Get one document
 						serverMethod = 'get';
+					// FIXME: Will this override query in some cases?
+					} else if (model.search != undefined && req.method == 'GET' && req.query.q != undefined) { // Search documents (given a req.query.q)
+						serverMethod = 'search';
 					} else if (req.method == 'GET') { // List all documents (filtered via req.query)
 						serverMethod = 'query';
 					} else if (req.method == 'POST' && req.params[settings.param] != undefined) { // Update an existing document
@@ -198,6 +203,10 @@ module.exports = function MongoosyRest(mongoosy, options) {
 							.skip(parseInt(req.query.skip))
 							.then(docs => docs.map(docMap))
 							.catch(e => console.log('ERR', e))
+							.catch(e => settings.errorHandler(res, 400, e))
+
+						case 'search': return model.search(req.query.q)
+							.then(docs => docs.map(docMap))
 							.catch(e => settings.errorHandler(res, 400, e))
 
 						case 'save': return model.findOneAndUpdate({
