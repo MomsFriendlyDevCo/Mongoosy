@@ -72,6 +72,8 @@ module.exports = function MongoosyRest(mongoosy, options) {
 	*/
 	// FIXME: Same function name as above
 	mongoosy.Rest = function MongoosyRest(model, options) {
+		mongoosy.set('debug', debug.enabled);
+
 		var settings = {...pluginSettings, ...options};
 
 		if (_.isString(model)) {
@@ -210,31 +212,32 @@ module.exports = function MongoosyRest(mongoosy, options) {
 							.then(docs => docs.map(docMap))
 							.catch(e => settings.errorHandler(res, 400, e))
 
-						case 'save': return model.findOneAndUpdate({
+						case 'save': return model.findOne({
 								[settings.searchId]: req.params[settings.param],
-							}, req.body, {
-								new: true,
-								strict: false // Allows saving of fields outside of schema
 							})
 							.exec()
+							// Mutate existing document while dirtying top-level keys.
+							.then(doc => {
+								delete req.body.__v;
+								for (var k in req.body) {
+									doc[k] = req.body[k];
+								}
+								return doc.save();
+							})
 							.then(doc => {
 								if (doc) return docMap(doc);
 								return settings.errorHandler(res, 404, 'Document not found when performing update');
 							})
 							.catch(e => {
-								if (e == 'Document not found when performing update') {
-									debug(`Document ID "${req.params[settings.param]}" found when performing update`);
-									return settings.errorHandler(res, 404, e);
-								} else {
-									debug(`Failed to update document "${req.params[settings.param]}" - ${e.toString()}`);
-									console.log(e);
-									return settings.errorHandler(res, 400, e);
-								}
+								debug(`Failed to update document "${req.params[settings.param]}" - ${e.toString()}`);
+								console.log(e);
+								return settings.errorHandler(res, 400, e);
 							})
 
-						case 'create': return model.insertOne(req.body)
+						case 'create': return model.create(req.body)
 							.catch(e => settings.errorHandler(res, 400, e))
 
+						// FIXME: Like Model.remove(), this function does not trigger pre('remove') or post('remove') hooks.
 						case 'delete': return model.deleteOne({
 								[settings.searchId]: req.params[settings.param],
 							})
