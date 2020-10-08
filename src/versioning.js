@@ -8,7 +8,8 @@ module.exports = (mongoosy) => {
 		};
 
 		// TODO: Are others among these inside _update?
-		schema.pre(['save', 'update', 'updateOne', 'updateMany'], hookFactory());
+		// FIXME: Is update correct or does it pass a MongooseDocument?
+		schema.pre(['update', 'updateOne', 'updateMany'], hookFactory());
 		schema.pre('findOneAndUpdate', hookFactory('_update'));
 	});
 };
