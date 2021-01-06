@@ -18,7 +18,6 @@ describe('mongoosy.Rest', function() {
 	before('drop existing movies collection', ()=> mongoosy.dropCollection('movies'));
 
 	before('create a movies schema', ()=> mongoosy.schema('movies', {
-		id: {type: 'oid', index: 'primary'},
 		title: {type: 'string', required: true},
 		year: {type: 'number', required: true},
 		info: {
@@ -51,6 +50,7 @@ describe('mongoosy.Rest', function() {
 			count: true,
 			save: true,
 			delete: true,
+			meta: true,
 		}));
 		app.use('/api/users/:id?', mongoosy.models.users.serve());
 		server = app.listen(port, null, finish);
@@ -193,6 +193,28 @@ describe('mongoosy.Rest', function() {
 			.then(res => this.fail)
 			.catch(res => expect(res.response).to.have.property('status', 400))
 	});
+	// }}}
+
+	// Meta (GET) {{{
+	it('get the structure of the data', ()=>
+		axios.get(`${url}/api/movies/meta`)
+			.then(res => {
+				expect(res.data).to.be.an('object');
+				expect(res.data).to.deep.equal({
+					'_id': {type: 'objectid', index: true},
+					'title': {type: 'string', required: true},
+					'year': {type: 'number', required: true},
+					'info.directors': {type: 'array', default: '[DYNAMIC]'},
+					'info.release_date': {type: 'date'},
+					'info.genres': {type: 'array', default: '[DYNAMIC]'},
+					'info.image_url': {type: 'string'},
+					'info.plot': {type: 'string'},
+					'info.rank': {type: 'number'},
+					'info.running_time_secs': {type: 'number'},
+					'info.actors': {type: 'array', default: '[DYNAMIC]'},
+				});
+			})
+	);
 	// }}}
 
 });

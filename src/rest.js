@@ -15,12 +15,14 @@ module.exports = function MongoosyRest(mongoosy, options) {
 	var pluginSettings = {
 		param: 'id',
 		countParam: 'count',
+		metaParam: 'meta',
 		get: true,
 		query: true,
 		count: true,
 		create: false,
 		save: false,
 		delete: false,
+		meta: false,
 		searchId: '_id',
 		errorHandler: (res, code, text) => res.status(code).send(text),
 		selectHidden: false,
@@ -42,6 +44,7 @@ module.exports = function MongoosyRest(mongoosy, options) {
 	* @param {Object} [options] Options object
 	* @param {string} [options.param="id"] Where to look in req.params for the document ID to get/update/delete
 	* @param {string} [options.countParam="count"] Special case URL suffix to identify that we are performating a count operation and not looking up an ID
+	* @param {string} [options.metaParam="meta"] Special case URL suffix to identify that we are performating a meta operation and not looking up an ID
 	* @param {string} [options.searchId="_id"] What field to search by when fetching / updating / deleting documents
 	* @param {boolean|array <function>|function} [options.get=true] Enable getting of records or specify middleware(s) to execute beforehand
 	* @param {boolean|array <function>|function} [options.query=true] Enable querying of records or specify middleware(s) to execute beforehand
@@ -49,6 +52,7 @@ module.exports = function MongoosyRest(mongoosy, options) {
 	* @param {boolean|array <function>|function} [options.create=false] Enable creating of records or specify middleware(s) to execute beforehand
 	* @param {boolean|array <function>|function} [options.save=false] Enable updating of records or specify middleware(s) to execute beforehand
 	* @param {boolean|array <function>|function} [options.delete=false] Enable deleting of records or specify middleware(s) to execute beforehand
+	* @param {boolean|array <function>|function} [options.meta=false] Enable retrieving the structure of the collection (as above)
 	* @param {object|function <Promise>|function} [options.queryForce] Override the incomming req.query object with either a static object or an evaluated promise returns. Called as `(req)`
 	* @param {function <Promise>|function} [options.queryValidate] Validate an incomming query, similar to `queryForce`. Throw an error to reject. Called as `(req)`.
 	* @param {boolean} [selectHidden=false] Automatically surpress all output fields prefixed with '_'
@@ -91,6 +95,8 @@ module.exports = function MongoosyRest(mongoosy, options) {
 				.then(()=> { // Work out method to use (GET /api/:id -> 'get', POST /api/:id -> 'save' etc.)
 					if (req.method == 'GET' && settings.countParam && req.params[settings.param] && req.params[settings.param] == settings.countParam) { // Count matches
 						serverMethod = 'count';
+					} else if (req.method == 'GET' && settings.metaParam && req.params[settings.param] && req.params[settings.param] == settings.metaParam) { // Return meta information
+						serverMethod = 'meta';
 					} else if (req.method == 'GET' && req.params[settings.param] != undefined) { // Get one document
 						serverMethod = 'get';
 					} else if (req.method == 'GET') { // List all documents (filtered via req.query)
@@ -184,6 +190,9 @@ module.exports = function MongoosyRest(mongoosy, options) {
 					switch (serverMethod) {
 						case 'count': return model.countDocuments(removeMetaParams(req.query))
 							.then(count => ({count}))
+							.catch(()=> res.sendStatus(400));
+
+						case 'meta': return Promise.resolve(model.meta())
 							.catch(()=> res.sendStatus(400));
 
 						case 'get': return model.findOne({
