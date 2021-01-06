@@ -12,7 +12,7 @@ module.exports = function(mongoosy) {
 
 		// Debugging enabled? Strap a debugging prefix onto all doc access methods
 		if (debug.enabled || process.env.DEBUG) {
-			['count', 'create', 'deleteMany', 'deleteOne', 'insert', 'insertOne', 'insertMany', 'updateMany', 'updateOne']
+			['count', 'create', 'deleteMany', 'deleteOne', 'findOneAndUpdate', 'insert', 'insertOne', 'insertMany', 'updateMany', 'updateOne']
 				.forEach(method => {
 					var originalMethod = model[method];
 					model[method] = function(...args) {

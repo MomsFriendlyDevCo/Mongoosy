@@ -22,6 +22,7 @@ The Mongoose module but with some quality-of-life additions:
 * [ ] Works with the MongoSh shell command
 * [x] Automatic field surpression (fields prefixed with '_')
 * [x] `DEBUG` env variable compatibility
+* [x] Version incrementing
 
 
 Differences from Mongoose
@@ -34,6 +35,11 @@ Sane connection defaults
 Configuring the initial connection options in Mongoose can be a pain. Mongoosy ships with all the latest Mongoose switches tuned to their correct values, preventing any depreciation warnings.
 
 **NOTE:** `mongoosy.connect()` and `mongoosy.compileModels()` need to be called seperately. This is so calls to schema construction can be buffered with additional hooks and virtuals declared before the entire schema structure is ready to compile.
+
+
+Version incrementing
+--------------------
+All documents have the meta `__v` property which now gets automatically incremented on each save.
 
 
 ObjectIds are always strings
@@ -263,9 +269,8 @@ When migrating from Monoxide to Mongoose there are a few minor things to remembe
 * Scenarios now use `$` as the ID field (formally: `_ref`), they also require all ID lookup fields to have a dollar prefix and the ID to match (including the prefix)
 * Queries returning no documents no longer automatically fail if `$errNoDocs` is set, use `query.orFail()` instead
 * `model.use()` -> `model.plugin()`
+* `model.findOneByID()` -> `model.findOne()`
+* When setting `{ type: Object, default: {} }` pass `{ minimize: false }` option to `Schema` in order to ensure the key is created.
 * Iterators now use the default [Mongoose cursor system](https://mongoosejs.com/docs/api/query.html#query_Query-cursor). Use the `Thing.find().cursor().map()` pattern instead of filter / map / forEach
 * Virtuals do not pass the document as the first parameter. Use `this` within the getter / setter function to recieve the current document
 * `model.hook()` is no longer supported. Use the [Mongoose pre/post methods instead](https://mongoosejs.com/docs/middleware.html#pre) - `model.pre('save', fn)` / `model.post('save', fn)` instead. `fn` is called as `(doc)` and will be waited on if its a promise.
-
-* Various safe shell replacements:
-	* `find -name '*.doop' -print0 | xargs -0 perl -pi -e 's/findOneByI[dD]/findById/g'`

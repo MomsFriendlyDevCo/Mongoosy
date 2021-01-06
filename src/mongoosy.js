@@ -1,6 +1,6 @@
 var _ = require('lodash');
 var Debug = require('debug');
-var debug = Debug('mongoosy');
+var debug = Debug('mongoosy:core');
 var mongoose = require('mongoose');
 var eventer = require('@momsfriendlydevco/eventer');
 var Schema = require('./schema');
@@ -17,6 +17,7 @@ class Mongoosy extends mongoose.Mongoose {
 
 		require('./rest')(this);
 		require('./model')(this);
+		// require('./versioning')(this);
 	};
 
 

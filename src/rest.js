@@ -16,6 +16,7 @@ module.exports = function MongoosyRest(mongoosy, options) {
 		param: 'id',
 		countParam: 'count',
 		metaParam: 'meta',
+		searchParam: 'q',
 		get: true,
 		query: true,
 		count: true,
@@ -45,10 +46,12 @@ module.exports = function MongoosyRest(mongoosy, options) {
 	* @param {string} [options.param="id"] Where to look in req.params for the document ID to get/update/delete
 	* @param {string} [options.countParam="count"] Special case URL suffix to identify that we are performating a count operation and not looking up an ID
 	* @param {string} [options.metaParam="meta"] Special case URL suffix to identify that we are performating a meta operation and not looking up an ID
+	* @param {string} [options.searchParam="q"] Special case URL querystring to identify that we are performating a search operation and not looking up an ID
 	* @param {string} [options.searchId="_id"] What field to search by when fetching / updating / deleting documents
 	* @param {boolean|array <function>|function} [options.get=true] Enable getting of records or specify middleware(s) to execute beforehand
 	* @param {boolean|array <function>|function} [options.query=true] Enable querying of records or specify middleware(s) to execute beforehand
 	* @param {boolean|array <function>|function} [options.count=true] Enable counting of records or specify middleware(s) to execute beforehand
+	* @param {boolean|array <function>|function} [options.search=false] Enable searching of records or specify middleware(s) to execute beforehand
 	* @param {boolean|array <function>|function} [options.create=false] Enable creating of records or specify middleware(s) to execute beforehand
 	* @param {boolean|array <function>|function} [options.save=false] Enable updating of records or specify middleware(s) to execute beforehand
 	* @param {boolean|array <function>|function} [options.delete=false] Enable deleting of records or specify middleware(s) to execute beforehand
@@ -70,7 +73,7 @@ module.exports = function MongoosyRest(mongoosy, options) {
 	*   delete: (req, res, next) => res.send('Are you sure you should be deleting that?'),
 	* ))
 	*/
-	mongoosy.serve = function MongoosyServe(model, options) {
+	mongoosy.Rest = function MongoosyRest(model, options) {
 		var settings = {...pluginSettings, ...options};
 
 		if (_.isString(model)) {
@@ -99,6 +102,8 @@ module.exports = function MongoosyRest(mongoosy, options) {
 						serverMethod = 'meta';
 					} else if (req.method == 'GET' && req.params[settings.param] != undefined) { // Get one document
 						serverMethod = 'get';
+					} else if (model.search != undefined && req.method == 'GET' && req.query[settings.searchParam] != undefined) { // Search documents (given a search querystring)
+						serverMethod = 'search';
 					} else if (req.method == 'GET') { // List all documents (filtered via req.query)
 						serverMethod = 'query';
 					} else if (req.method == 'POST' && req.params[settings.param] != undefined) { // Update an existing document
@@ -127,7 +132,6 @@ module.exports = function MongoosyRest(mongoosy, options) {
 							})
 					} else if (_.isObject(settings.queryForce)) {
 						req.query = settings.queryForce;
-						debug('Clobber req.query with queryForce object:', req.query);
 					}
 				})
 				// }}}
@@ -187,6 +191,7 @@ module.exports = function MongoosyRest(mongoosy, options) {
 						return _.pickBy(doc.toObject(), (v, k) => settings.neverHidden.includes(k) || !k.startsWith('_'));
 					};
 
+					// FIXME: Are there cases here which should call `exec()` instead of relying on a single `then`?
 					switch (serverMethod) {
 						case 'count': return model.countDocuments(removeMetaParams(req.query))
 							.then(count => ({count}))
@@ -214,22 +219,30 @@ module.exports = function MongoosyRest(mongoosy, options) {
 							.then(docs => docs.map(docMap))
 							.catch(e => settings.errorHandler(res, 400, e))
 
-						case 'save': return model.findOneAndUpdate({
-								[settings.searchId]: req.params[settings.param],
-							}, req.body, {new: true})
-							.catch(e => {
-								if (e == 'Document not found when performing update') {
-									debug(`Document ID "${req.params[settings.param]}" found when performing update`);
-									return settings.errorHandler(res, 404, e);
-								} else {
-									debug(`Failed to update document "${req.params[settings.param]}" - ${e.toString()}`);
-									return settings.errorHandler(res, 400, e);
-								}
-							})
-
-						case 'create': return model.insertOne(req.body)
+						case 'search': return model.search(req.query[settings.searchParam])
+							.then(docs => docs.map(docMap))
 							.catch(e => settings.errorHandler(res, 400, e))
 
+
+						case 'save': return model.findById(req.params[settings.param])
+							.then(doc => { // Mutate existing document while dirtying top-level keys.
+								_.merge(doc, _.omit(req.body, ['_id', '__v']));
+								return doc.save();
+							})
+							.then(doc => {
+								if (doc) return docMap(doc);
+								return settings.errorHandler(res, 404, 'Document not found when performing update');
+							})
+							.catch(e => {
+								debug(`Failed to update document "${req.params[settings.param]}" - ${e.toString()}`);
+								console.log(e);
+								return settings.errorHandler(res, 400, e);
+							})
+
+						case 'create': return model.create(req.body)
+							.catch(e => settings.errorHandler(res, 400, e))
+
+						// FIXME: Like Model.remove(), this function does not trigger pre('remove') or post('remove') hooks.
 						case 'delete': return model.deleteOne({
 								[settings.searchId]: req.params[settings.param],
 							})
@@ -252,6 +265,17 @@ module.exports = function MongoosyRest(mongoosy, options) {
 	};
 	// }}}
 
+	// mongoosy.serve {{{
+	/**
+	* Create a new Express compatible ReST server middleware
+	* @param {string|Mongoosymodel} model The model to bind to, or its name
+	* @param {Object} [options] Additional options to use, see the MongoosyRest for the full list of options
+	* @returns {MongoosyRest} A MongoosyRest express middleware factory
+	*/
+	mongoosy.serve = (model, options) =>
+		new mongoosy.Rest(mongoosy.models[model], options);
+	// }}}
+
 	// mongoosy.models.model.serve {{{
 	mongoosy.on('model', model => {
 		/**
@@ -259,7 +283,8 @@ module.exports = function MongoosyRest(mongoosy, options) {
 		* @param {Object} [options] Additional options to use, see the MongoosyRest for the full list of options
 		* @returns {MongoosyRest} A MongoosyRest express middleware factory
 		*/
-		model.serve = options => mongoosy.serve(model, options);
+		model.serve = options =>
+			new mongoosy.Rest(model, options);
 	});
 	// }}}
 };
