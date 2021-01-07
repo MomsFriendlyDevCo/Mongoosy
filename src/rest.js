@@ -58,6 +58,7 @@ module.exports = function MongoosyRest(mongoosy, options) {
 	* @param {boolean|array <function>|function} [options.meta=false] Enable retrieving the structure of the collection (as above)
 	* @param {object|function <Promise>|function} [options.queryForce] Override the incomming req.query object with either a static object or an evaluated promise returns. Called as `(req)`
 	* @param {function <Promise>|function} [options.queryValidate] Validate an incomming query, similar to `queryForce`. Throw an error to reject. Called as `(req)`.
+	* @param {array<string>} [metaCustomFields] Additional fields to expose in meta
 	* @param {boolean} [selectHidden=false] Automatically surpress all output fields prefixed with '_'
 	* @param {boolean} [forbidHidden=true] Forbid the selection of fields prefixed with '_' if the field has `{select: false}`
 	* @param {array<string>} [neverHidden=['_id', '__v']] Array of items which are excluded from hiding
@@ -197,7 +198,7 @@ module.exports = function MongoosyRest(mongoosy, options) {
 							.then(count => ({count}))
 							.catch(()=> res.sendStatus(400));
 
-						case 'meta': return Promise.resolve(model.meta())
+						case 'meta': return Promise.resolve(model.meta({custom: settings.metaCustomFields}))
 							.catch(()=> res.sendStatus(400));
 
 						case 'get': return model.findOne({
