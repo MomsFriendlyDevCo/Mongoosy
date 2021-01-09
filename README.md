@@ -195,6 +195,18 @@ mongoosy.scenario({
 In the above scenario the company is inserted first, its ID remembered and used to populate the `company` field of the user.
 
 
+Options:
+
+| Option       | Type       | Default | Description                                                                                                                                                                   |
+|--------------|------------|---------|-------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
+| `nuke`       | `boolean`  | `false` | Whether to erase / rebuild existing collections before replacing them entirely                                                                                                |
+| `threads`    | `number`   | `3`     | How many documents to attempt to create at once                                                                                                                               |
+| `postRead`   | `function` |         | Manipulate the merged scenario object before processing, called as (tree) where each key is the model and all keys are an array of items, expected to return the changed tree |
+| `postCreate` | `function` |         | Function called whenever a document is created under a model, called as (model, count) where model is a string and count the number created for that model so far             |
+| `postStats`  | `function` |         | Called when complete as (stats) where each key is the model and the value is the number of documents created                                                                  |
+
+
+
 mongoosy.serve(model, options)
 ------------------------------
 Create a Express compatible middleware backend which functions as a ReST server.

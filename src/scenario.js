@@ -35,10 +35,10 @@ var scanDoc = (doc, lookup = {}) => {
 * @param {Object|string|array <string|object>} input Either a JS object(s) or a file glob (or array of globs) to process
 * @param {Object} [options] Additional options
 * @param {boolean} [nuke=false] Whether to erase / rebuild existing collections before replacing them entirely
+* @param {number} [options.threads=3] How many documents to attempt to create at once
 * @param {function <Promise>} [options.postRead] Manipulate the merged scenario object before processing, called as (tree) where each key is the model and all keys are an array of items, expected to return the changed tree
 * @param {function} [options.postCreate] Function called whenever a document is created under a model, called as (model, count) where model is a string and count the number created for that model so far
 * @param {function} [options.postStats] Called when complete as (stats) where each key is the model and the value is the number of documents created
-* @param {number} [options.threads=3] How many documents to attempt to create at once
 * @returns {Promise} A promise which will resolve when the input data has been processed
 */
 module.exports = function MongoosyScenario(mongoosy, input, options) {
