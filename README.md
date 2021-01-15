@@ -199,6 +199,7 @@ Options:
 
 | Option       | Type       | Default | Description                                                                                                                                                                   |
 |--------------|------------|---------|-------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
+| `glob`       | `object`   | `{}`    | Additional options to pass to globby                                                                                                                                          |
 | `nuke`       | `boolean`  | `false` | Whether to erase / rebuild existing collections before replacing them entirely                                                                                                |
 | `threads`    | `number`   | `3`     | How many documents to attempt to create at once                                                                                                                               |
 | `postRead`   | `function` |         | Manipulate the merged scenario object before processing, called as (tree) where each key is the model and all keys are an array of items, expected to return the changed tree |

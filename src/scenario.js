@@ -34,6 +34,7 @@ var scanDoc = (doc, lookup = {}) => {
 * @param {Objet} mongoosy Mongoosy instance to use
 * @param {Object|string|array <string|object>} input Either a JS object(s) or a file glob (or array of globs) to process
 * @param {Object} [options] Additional options
+* @param {Object} [options.glob] Additional options to pass to globby
 * @param {boolean} [nuke=false] Whether to erase / rebuild existing collections before replacing them entirely
 * @param {number} [options.threads=3] How many documents to attempt to create at once
 * @param {function <Promise>} [options.postRead] Manipulate the merged scenario object before processing, called as (tree) where each key is the model and all keys are an array of items, expected to return the changed tree
@@ -45,7 +46,7 @@ module.exports = function MongoosyScenario(mongoosy, input, options) {
 	return Promise.resolve()
 		.then(()=> Promise.all(_.castArray(input).map(item => {
 			if (_.isString(item)) {
-				return glob(item)
+				return glob(item, options?.glob)
 					.then(files => files.map(file => {
 						var res = require(file);
 						if (!res || !_.isObject(res)) throw new Error(`Error importing scenario contents from ${file}, expected object got ${typeof res}`);
@@ -124,10 +125,18 @@ module.exports = function MongoosyScenario(mongoosy, input, options) {
 				.then(()=> { // Filter queue to non-created items
 					var newQueue = queue.filter(item => !item.created);
 					if (newQueue.length > 0 && queue.length == newQueue.length) {
-						debug('--- UNRESOLVABLE QUEUE ---');
+						debug('------- UNRESOLVABLE SCENARIO -----');
+						debug('Leftover unresolvable / wanted IDs: %O', _.chain(newQueue)
+							.map(q => q.needs)
+							.flatten()
+							.sort()
+							.uniq()
+							.value()
+						);
+						debug('-------- UNRESOLVABLE QUEUE -------');
 						debug(newQueue);
-						debug('----------- END ----------');
-						throw new Error('Unresolvable scenario - set DEBUG=mongoosy:scenario to see document queue');
+						debug('---------------- END --------------');
+						throw new Error(debug.enabled ? 'Unresolvable scenario' : 'Unresolvable scenario - set DEBUG=mongoosy:scenario to see document queue');
 					}
 
 					debug('Imported', queue.length - newQueue.length, 'in scenario cycle with', newQueue.length, 'remaining after cycle', ++scenarioCycle);
