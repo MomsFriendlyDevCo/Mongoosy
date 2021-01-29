@@ -152,10 +152,11 @@ module.exports = function MongoosyRest(mongoosy, options) {
 					if (middleware === true || (Array.isArray(middleware) && !middleware.length)) { // Endpoint enabled or no middleware to call
 						return; // Pass through
 					} else if (Array.isArray(middleware)) { // Array of middleware - run in series until exhausted
+						var middlewareQueue = [...middleware]; // Soft copy middleare
 						return new Promise((resolve, reject) => {
 							var runNextMiddleware = err => {
 								if (err) return reject(err);
-								var thisMiddleware = middleware.shift();
+								var thisMiddleware = middlewareQueue.shift();
 								if (!thisMiddleware) return resolve(); // Exhausted all middleware
 								thisMiddleware(req, res, runNextMiddleware);
 							}
