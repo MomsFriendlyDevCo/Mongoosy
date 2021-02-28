@@ -181,6 +181,7 @@ module.exports = function MongoosyRest(mongoosy, options) {
 						[settings.searchId]: req.params[settings.param],
 						query: req.query,
 						queryNoMeta: removeMetaParams(req.query),
+						body: req.body,
 					});
 
 
@@ -228,7 +229,12 @@ module.exports = function MongoosyRest(mongoosy, options) {
 
 						case 'save': return model.findById(req.params[settings.param])
 							.then(doc => { // Mutate existing document while dirtying top-level keys.
-								_.merge(doc, _.omit(req.body, ['_id', '__v']));
+								// FIXME: This pattern failed to touch root-level setters.
+								//_.merge(doc, _.omit(req.body, ['_id', '__v']));
+								delete req.body.__v;
+								for (var k in req.body) {
+									doc[k] = req.body[k];
+								}
 								return doc.save();
 							})
 							.then(doc => {
