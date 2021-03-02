@@ -90,7 +90,7 @@ module.exports = function MongoosyRest(mongoosy, options) {
 
 		var removeMetaParams = query => _.omit(query, ['limit', 'select', 'skip', 'sort']);
 
-		debug('Setup ReST middleware for model', model.name);
+		debug('Setup ReST middleware for model', model.modelName);
 		return (req, res) => {
 			var serverMethod;
 
@@ -132,6 +132,7 @@ module.exports = function MongoosyRest(mongoosy, options) {
 								req.query = newQuery
 							})
 					} else if (_.isObject(settings.queryForce)) {
+						debug('Clobber req.query with replacement value from queryForce:', settings.queryForce);
 						req.query = settings.queryForce;
 					}
 				})
@@ -206,6 +207,7 @@ module.exports = function MongoosyRest(mongoosy, options) {
 						case 'get': return model.findOne({
 								[settings.searchId]: req.params[settings.param],
 							})
+							// FIXME: This select does not hold, debug logs say all fields are expliticitly selected
 							.select(req.query.select ? req.query.select.split(/[\s\,]+/).join(' ') : undefined)
 							.then(doc => {
 								if (doc) return docMap(doc);
