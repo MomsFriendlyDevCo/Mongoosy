@@ -207,7 +207,7 @@ module.exports = function MongoosyRest(mongoosy, options) {
 						case 'get': return model.findOne({
 								[settings.searchId]: req.params[settings.param],
 							})
-							// FIXME: This select does not hold, debug logs say all fields are expliticitly selected
+							// FIXME: This select does not hold, debug logs say all fields are explicitly selected
 							.select(req.query.select ? req.query.select.split(/[\s\,]+/).join(' ') : undefined)
 							.then(doc => {
 								if (doc) return docMap(doc);
