@@ -89,6 +89,17 @@ module.exports = function MongoosyRest(mongoosy, options) {
 		}
 
 		var removeMetaParams = query => _.omit(query, ['limit', 'select', 'skip', 'sort']);
+		var attemptParse = query => {
+			try {
+				let res = {};
+				for (k in query) {
+					res[k] = JSON.parse(query[k]);
+				}
+				return res;
+			} catch(e) {
+				return query;
+			}
+		};
 
 		debug('Setup ReST middleware for model', model.modelName);
 		return (req, res) => {
@@ -181,7 +192,8 @@ module.exports = function MongoosyRest(mongoosy, options) {
 						serverMethod,
 						[settings.searchId]: req.params[settings.param],
 						query: req.query,
-						queryNoMeta: removeMetaParams(req.query),
+						attemptParse: attemptParse(removeMetaParams(req.query)),
+						removeMetaParams: removeMetaParams(req.query),
 						body: req.body,
 					});
 
@@ -197,7 +209,7 @@ module.exports = function MongoosyRest(mongoosy, options) {
 
 					// FIXME: Are there cases here which should call `exec()` instead of relying on a single `then`?
 					switch (serverMethod) {
-						case 'count': return model.countDocuments(removeMetaParams(req.query))
+						case 'count': return model.countDocuments(attemptParse(removeMetaParams(req.query)))
 							.then(count => ({count}))
 							.catch(()=> res.sendStatus(400));
 
@@ -216,7 +228,7 @@ module.exports = function MongoosyRest(mongoosy, options) {
 							})
 							.catch(()=> res.sendStatus(404));
 
-						case 'query': return model.find(removeMetaParams(req.query))
+						case 'query': return model.find(attemptParse(removeMetaParams(req.query)))
 							.select(req.query.select ? req.query.select.split(/[\s\,]+/).join(' ') : undefined)
 							.sort(req.query.sort)
 							.limit(parseInt(req.query.limit))
