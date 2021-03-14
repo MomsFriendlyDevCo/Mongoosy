@@ -112,9 +112,9 @@ module.exports = function MongoosyScenario(mongoosy, input, options) {
 							if (item.id) lookup[item.id] = created._id;
 							item.created = true;
 
-							if (options && options.postCreate) {
+							if (options && (options.postCreate || options.postStats)) {
 								modelCounts[item.collection] = modelCounts[item.collection] ? ++modelCounts[item.collection] : 1;
-								options.postCreate(item.collection, modelCounts[item.collection]);
+								if (options.postCreate) options.postCreate(item.collection, modelCounts[item.collection]);
 							}
 						})
 						.catch(e => {
