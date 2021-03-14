@@ -89,8 +89,19 @@ module.exports = function MongoosyRest(mongoosy, options) {
 		}
 
 		var removeMetaParams = query => _.omit(query, ['limit', 'select', 'skip', 'sort']);
+		var attemptParse = query => {
+			try {
+				let res = {};
+				for (k in query) {
+					res[k] = JSON.parse(query[k]);
+				}
+				return res;
+			} catch(e) {
+				return query;
+			}
+		};
 
-		debug('Setup ReST middleware for model', model.name);
+		debug('Setup ReST middleware for model', model.modelName);
 		return (req, res) => {
 			var serverMethod;
 
@@ -132,6 +143,7 @@ module.exports = function MongoosyRest(mongoosy, options) {
 								req.query = newQuery
 							})
 					} else if (_.isObject(settings.queryForce)) {
+						debug('Clobber req.query with replacement value from queryForce:', settings.queryForce);
 						req.query = settings.queryForce;
 					}
 				})
@@ -180,7 +192,9 @@ module.exports = function MongoosyRest(mongoosy, options) {
 						serverMethod,
 						[settings.searchId]: req.params[settings.param],
 						query: req.query,
-						queryNoMeta: removeMetaParams(req.query),
+						attemptParse: attemptParse(removeMetaParams(req.query)),
+						removeMetaParams: removeMetaParams(req.query),
+						body: req.body,
 					});
 
 
@@ -195,7 +209,7 @@ module.exports = function MongoosyRest(mongoosy, options) {
 
 					// FIXME: Are there cases here which should call `exec()` instead of relying on a single `then`?
 					switch (serverMethod) {
-						case 'count': return model.countDocuments(removeMetaParams(req.query))
+						case 'count': return model.countDocuments(attemptParse(removeMetaParams(req.query)))
 							.then(count => ({count}))
 							.catch(()=> res.sendStatus(400));
 
@@ -205,6 +219,7 @@ module.exports = function MongoosyRest(mongoosy, options) {
 						case 'get': return model.findOne({
 								[settings.searchId]: req.params[settings.param],
 							})
+							// FIXME: This select does not hold, debug logs say all fields are explicitly selected
 							.select(req.query.select ? req.query.select.split(/[\s\,]+/).join(' ') : undefined)
 							.then(doc => {
 								if (doc) return docMap(doc);
@@ -213,7 +228,7 @@ module.exports = function MongoosyRest(mongoosy, options) {
 							})
 							.catch(()=> res.sendStatus(404));
 
-						case 'query': return model.find(removeMetaParams(req.query))
+						case 'query': return model.find(attemptParse(removeMetaParams(req.query)))
 							.select(req.query.select ? req.query.select.split(/[\s\,]+/).join(' ') : undefined)
 							.sort(req.query.sort)
 							.limit(parseInt(req.query.limit))
@@ -228,7 +243,12 @@ module.exports = function MongoosyRest(mongoosy, options) {
 
 						case 'save': return model.findById(req.params[settings.param])
 							.then(doc => { // Mutate existing document while dirtying top-level keys.
-								_.merge(doc, _.omit(req.body, ['_id', '__v']));
+								// FIXME: This pattern failed to touch root-level setters.
+								//_.merge(doc, _.omit(req.body, ['_id', '__v']));
+								delete req.body.__v;
+								for (var k in req.body) {
+									doc[k] = req.body[k];
+								}
 								return doc.save();
 							})
 							.then(doc => {
