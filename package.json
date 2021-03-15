@@ -24,16 +24,16 @@
   "homepage": "https://github.com/MomsFriendlyDevCo/Mongoosy",
   "dependencies": {
     "@momsfriendlydevco/eventer": "^1.5.1",
-    "globby": "^11.0.1",
-    "lodash": "^4.17.20",
-    "mongoose": "^5.10.0"
+    "globby": "^11.0.2",
+    "lodash": "^4.17.21",
+    "mongoose": "^5.12.0"
   },
   "devDependencies": {
     "axios": "^0.21.1",
     "body-parser": "^1.19.0",
-    "chai": "^4.2.0",
+    "chai": "^4.3.4",
     "express": "^4.17.1",
-    "express-log-url": "^1.4.0",
-    "mocha": "^8.1.1"
+    "express-log-url": "^1.5.1",
+    "mocha": "^8.3.2"
   }
 }
