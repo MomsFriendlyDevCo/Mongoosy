@@ -161,6 +161,11 @@ module.exports = function MongoosyRest(mongoosy, options) {
 				.then(()=> {
 					var middleware = settings[serverMethod];
 
+					if (typeof middleware == 'string') {
+						if (!settings[middleware]) throw new Error(`Middleware redirection to non-existant key "${middleware}"`);
+						middleware = settings[middleware];
+					}
+
 					if (middleware === true || (Array.isArray(middleware) && !middleware.length)) { // Endpoint enabled or no middleware to call
 						return; // Pass through
 					} else if (Array.isArray(middleware)) { // Array of middleware - run in series until exhausted

@@ -258,7 +258,7 @@ The following options are supported:
 
 **Notes:**
 
-* The `get` / `query` / `count` / `create` / `save` / `delete` / `meta` methods can be a simple boolean to enable / disable, an array of Express middleware functions or a single middleware function. Middleware are all called as `(req, res, next)` and can either call `next()` to accept the request or handle output via `res.send()`
+* The `get` / `query` / `count` / `create` / `save` / `delete` / `meta` methods can be a simple boolean to enable / disable, an array of Express middleware functions, a single middleware function or a string pointing to the definition in another key. Middleware are all called as `(req, res, next)` and can either call `next()` to accept the request or handle output via `res.send()`
 * If `queryForce` is a function it is expected to either mutate `req.query` or return the new absolute contents of that object which is spliced in place. Any falsy return is ignored
 
 
