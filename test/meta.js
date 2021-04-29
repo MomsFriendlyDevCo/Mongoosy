@@ -6,7 +6,7 @@ require('./setup');
 describe('MODEL.meta()', ()=> {
 
 	it('should calculate a models meta structure', ()=> {
-		expect(mongoosy.models.users.meta()).to.deep.equal({
+		expect(mongoosy.models.users.meta({prototype: true})).to.deep.equal({
 			'_id': {type: 'objectid', index: true},
 			'company': {type: 'objectid', ref: 'companies', index: true},
 			'name': {type: 'string'},
@@ -22,6 +22,23 @@ describe('MODEL.meta()', ()=> {
 			'favourite.widget': {type: 'objectid', ref: 'widgets', index: true},
 			'settings.lang': {type: 'string', enum: [{id: 'en', title: 'En'}, {id: 'es', title: 'Es'}, {id: 'fr', title: 'Fr'}], default: 'en'},
 			'settings.greeting': {type: 'string', default: 'Hello'},
+			$prototype: {
+				company: undefined,
+				name: '',
+				status: 'unverified',
+				role: 'user',
+				mostPurchased: [],
+				widgets: [],
+				favourite: {
+					color: '',
+					animal: '',
+					widget: undefined,
+				},
+				settings: {
+					lang: 'en',
+					greeting: 'Hello',
+				},
+			},
 		});
 	});
 

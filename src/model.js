@@ -31,6 +31,7 @@ module.exports = function(mongoosy) {
 		* @param {array<string>} [options.custom] Additional field names to provide, each must be explicitly specified
 		* @param {boolean} [options.filterPrivate=true] Omit all fields matching /^_/
 		* @param {boolean} [options.indexes=true] Append indexing information
+		* @param {boolean} [options.prototype=false] Add a `$prototype` key which contains an empty object with all defaults applied
 		*
 		* @returns {Object<String: Object>} An object with each dotted notation path as the key and basic information about each path
 		* @property {string} type The type of data. Corresponds to 'string', 'number', 'date', 'boolean', 'array', 'object', 'objectid'
@@ -121,6 +122,22 @@ module.exports = function(mongoosy) {
 				});
 			};
 			scanNode(this.schema.paths);
+			// }}}
+
+			// Compute prototype {{{
+			if (settings.prototype) {
+				meta.$prototype = Object.entries(meta)
+					.filter(([key, val]) => key != '_id') // Skip ID field
+					.reduce((proto, [key, val]) =>
+						_.set(proto, key,
+							val.default && val.default != '[DYNAMIC]' ? val.default
+							: val.type == 'string' ? ''
+							: val.type == 'array' ? []
+							: val.type == 'object' ? {}
+							: undefined
+						)
+					, {});
+			}
 			// }}}
 
 			return meta;

@@ -1,6 +1,6 @@
 {
   "name": "@momsfriendlydevco/mongoosy",
-  "version": "0.0.6",
+  "version": "0.0.7",
   "description": "Wrapper for Mongoose that adds some additional functionality",
   "main": "src/mongoosy.js",
   "repository": {

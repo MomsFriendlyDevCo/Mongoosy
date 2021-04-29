@@ -214,6 +214,25 @@ Create a Express compatible middleware backend which functions as a ReST server.
 This is an alternate method to call `mongoosy.models.MODEL.serve(options)` with an explicit model.
 
 
+mongoosy.models.MODEL.meta(options)
+-----------------------------------
+Return frontend-safe meta information about the schema of a model.
+An object is returned with the key of each being the dotted notation to the schema path. The value is an object of the form `{type: String, enum?: Array, default?: Any, required?: Boolean, ...customFields}`
+
+Options are:
+
+| Option            | Type      | Default | Description                                                                        |
+|-------------------|-----------|---------|------------------------------------------------------------------------------------|
+| `arrayDefault`    | `boolean` | `true`  | Set the default type for arrays to `[]`                                            |
+| `collectionEnums` | `boolean` | `true`  | Convert all enums into a collection of the type `{id: String, title: String}`      |
+| `custom`          | `array`   | `[]`    | Additional field names to provide, each must be explicitly specified               |
+| `filterPrivate    | `boolean` | `true`  | Omit all fields matching /^_/                                                      |
+| `indexes`         | `boolean` | `true`  | Append indexing information                                                        |
+| `prototype`       | `boolean` | `false` | Add a `$prototype` key which contains an empty object with all defaults applied |
+
+
+
+
 mongoosy.models.MODEL.serve(options)
 ------------------------------------
 Create a Express compatible middleware backend which functions as a ReST server.
@@ -234,7 +253,7 @@ app.use('/api/movies/:id?', mongoosy.models.movies.serve({
 
 The following options are supported:
 
-| Opition         | Type                 | Default   | Description                                                                                                         |
+| Option          | Type                 | Default   | Description                                                                                                         |
 |-----------------|----------------------|-----------|---------------------------------------------------------------------------------------------------------------------|
 | `get`           | See notes            | `true`    | Enable getting of records or specify middleware(s) to execute beforehand                                            |
 | `query`         | See notes            | `true`    | Enable querying of records or specify middleware(s) to execute beforehand                                           |
