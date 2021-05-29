@@ -183,7 +183,7 @@ mongoosy.scenario({
 	],
 	users: [
 		{
-			$: 'users.joe',
+			$: '$users.joe',
 			name: 'Joe Random',
 			company: '$company.acme', // <- The ID of the first company is inserted here
 		},
