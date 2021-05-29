@@ -17,7 +17,6 @@ var scanDoc = (doc, lookup = {}) => {
 		} else if (_.isPlainObject(node)) {
 			Object.keys(node).forEach(k => k != '$' && scanNode(node[k], path.concat(k)));
 		} else if (_.isString(node) && node.startsWith('$') && node.length > 1) {
-			node = node.substring(1);
 			if (lookup[node]) {
 				_.set(doc, path, lookup[node]);
 			} else {
