@@ -25,7 +25,10 @@ module.exports = function MongoosyRest(mongoosy, options) {
 		delete: false,
 		meta: false,
 		searchId: '_id',
-		errorHandler: (res, code, text) => res.status(code).send(text),
+		errorHandler: (res, code, text) => {
+			debug('ERROR', code, text);
+			return res.status(code).send(text);
+		},
 		selectHidden: false,
 		forbidHidden: true,
 		neverHidden: ['_id', '__v'],
@@ -88,7 +91,7 @@ module.exports = function MongoosyRest(mongoosy, options) {
 			throw new Error('Unspecified model type when creating ReST middleware');
 		}
 
-		var removeMetaParams = query => _.omit(query, ['limit', 'select', 'skip', 'sort']);
+		var removeMetaParams = query => _.omit(query, ['limit', 'select', 'skip', 'sort', 'populate']);
 		var attemptParse = query => {
 			try {
 				let res = {};
@@ -216,25 +219,27 @@ module.exports = function MongoosyRest(mongoosy, options) {
 					switch (serverMethod) {
 						case 'count': return model.countDocuments(attemptParse(removeMetaParams(req.query)))
 							.then(count => ({count}))
-							.catch(()=> res.sendStatus(400));
+							.catch(e => settings.errorHandler(res, 400, e));
 
 						case 'meta': return Promise.resolve(model.meta({custom: settings.metaCustomFields}))
-							.catch(()=> res.sendStatus(400));
+							.catch(e => settings.errorHandler(res, 400, e));
 
 						case 'get': return model.findOne({
 								[settings.searchId]: req.params[settings.param],
 							})
 							// FIXME: This select does not hold, debug logs say all fields are explicitly selected
 							.select(req.query.select ? req.query.select.split(/[\s\,]+/).join(' ') : undefined)
+							.populate(req.query.populate ? req.query.populate.split(/[\s\,]+/).join(' ') : undefined)
 							.then(doc => {
 								if (doc) return docMap(doc);
 								res.sendStatus(404);
 								return;
 							})
-							.catch(()=> res.sendStatus(404));
+							.catch(e => settings.errorHandler(res, 400, e))
 
 						case 'query': return model.find(attemptParse(removeMetaParams(req.query)))
 							.select(req.query.select ? req.query.select.split(/[\s\,]+/).join(' ') : undefined)
+							.populate(req.query.populate ? req.query.populate.split(/[\s\,]+/).join(' ') : undefined)
 							.sort(req.query.sort)
 							.limit(parseInt(req.query.limit))
 							.skip(parseInt(req.query.skip))
