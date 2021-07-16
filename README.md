@@ -253,26 +253,30 @@ app.use('/api/movies/:id?', mongoosy.models.movies.serve({
 
 The following options are supported:
 
-| Option          | Type                 | Default   | Description                                                                                                         |
-|-----------------|----------------------|-----------|---------------------------------------------------------------------------------------------------------------------|
-| `get`           | See notes            | `true`    | Enable getting of records or specify middleware(s) to execute beforehand                                            |
-| `query`         | See notes            | `true`    | Enable querying of records or specify middleware(s) to execute beforehand                                           |
-| `queryForce`    | Promiseable function |           | Called as `(req)` to override `req.query` with either a static object or an evaluated promise. Called as `(req)`    |
-| `queryValidate` | Promiseable function |           | Validate an incomming query, similar to `queryForce`. Throw an error to reject. Called as `(req)`.                  |
-| `count`         | See notes            | `true`    | Enable counting of records or specify middleware(s) to execute beforehand                                           |
-| `countParam`    | `string`             | `"count"` | Special case URL suffix to identify that we are performating a count operation and not looking up an ID             |
-| `create`        | See notes            | `true`    | Enable creating of records or specify middleware(s) to execute beforehand                                           |
-| `save`          | See notes            | `true`    | Enable updating of records or specify middleware(s) to execute beforehand                                           |
-| `delete`        | See notes            | `true`    | Enable deleting of records or specify middleware(s) to execute beforehand                                           |
-| `meta`          | See notes            | `true`    | Enable retrieving the structure of the collection                                                                   |
-| `metaCustomFields` | `array<string>`   | `[]`      | Array of additional custom fields to expose during a meta data query                                                |
-| `metaParam`     | `string`             | `"meta"`  | Special case URL suffix to identify that we are performating a meta operation and not looking up an ID              |
-| `param`         | `string`             | `"id"`    | Where to look in req.params for the document ID to get/update/delete                                                |
-| `searchId`      | `string`             | `"_id"`   | What field to search by when fetching / updating / deleting documents                                               |
-| `selectHidden`  | `boolean`            | `false`   | Automatically surpress all output fields prefixed with `_`                                                          |
-| `forbidHidden`  | `boolean`            | `true`    | Forbid the selection of fields prefixed with `_`                                                                    |
-| `neverHidden`   | `array<string>`      | `['_id', '__v']` | Array of fields which are excluded from hiding                                                               |
-| `errorHandler`  | Function             | See code  | How to handle errors, default is to use Expresses `res.status(code).send(text)` method. Called as (res, code, text) |
+| Option             | Type                 | Default          | Description                                                                                                               |
+|--------------------|----------------------|------------------|---------------------------------------------------------------------------------------------------------------------------|
+| `get`              | See notes            | `true`           | Enable getting of records or specify middleware(s) to execute beforehand                                                  |
+| `getMap`           | Promiseable function |                  | Function to use post-get to mangle a single document in a get (overrides `selectHidden`). Called as `(MongooseDocument)`  |
+| `query`            | See notes            | `true`           | Enable querying of records or specify middleware(s) to execute beforehand                                                 |
+| `queryForce`       | Promiseable function |                  | Called as `(req)` to override `req.query` with either a static object or an evaluated promise. Called as `(req)`          |
+| `queryMap`         | Promiseable function |                  | Function to use post-query to mangle outgoing documents (overrides `selectHidden`). Called as `(MongooseDocument)`        |
+| `queryValidate`    | Promiseable function |                  | Validate an incomming query, similar to `queryForce`. Throw an error to reject. Called as `(req)`.                        |
+| `count`            | See notes            | `true`           | Enable counting of records or specify middleware(s) to execute beforehand                                                 |
+| `countParam`       | `string`             | `"count"`        | Special case URL suffix to identify that we are performating a count operation and not looking up an ID                   |
+| `create`           | See notes            | `true`           | Enable creating of records or specify middleware(s) to execute beforehand                                                 |
+| `save`             | See notes            | `true`           | Enable updating of records or specify middleware(s) to execute beforehand                                                 |
+| `delete`           | See notes            | `true`           | Enable deleting of records or specify middleware(s) to execute beforehand                                                 |
+| `meta`             | See notes            | `true`           | Enable retrieving the structure of the collection                                                                         |
+| `metaCustomFields` | `array<string>`      | `[]`             | Array of additional custom fields to expose during a meta data query                                                      |
+| `metaParam`        | `string`             | `"meta"`         | Special case URL suffix to identify that we are performating a meta operation and not looking up an ID                    |
+| `search`           | See notes            | `false`          | Enable searching of records or specify middleware(s) to execute beforehand                                                |
+| `searchId`         | `string`             | `"_id"`          | What field to search by when fetching / updating / deleting documents                                                     |
+| `searchParam`      | `string`             | `'q'`            | Special case URL querystring to identify that we are performating a search operation and not looking up an ID             |
+| `param`            | `string`             | `"id"`           | Where to look in req.params for the document ID to get/update/delete                                                      |
+| `selectHidden`     | `boolean`            | `false`          | Automatically surpress all output fields prefixed with `_`                                                                |
+| `forbidHidden`     | `boolean`            | `true`           | Forbid the selection of fields prefixed with `_`                                                                          |
+| `neverHidden`      | `array<string>`      | `['_id', '__v']` | Array of fields which are excluded from hiding                                                                            |
+| `errorHandler`     | Function             | See code         | How to handle errors, default is to use Expresses `res.status(code).send(text)` method. Called as (res, code, text)       |
 
 
 **Notes:**
