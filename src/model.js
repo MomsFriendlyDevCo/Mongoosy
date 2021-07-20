@@ -173,6 +173,16 @@ module.exports = function(mongoosy) {
 		};
 
 
+		/**
+		* Redirect count -> countDocuments
+		* @param {Object} query Query to count by
+		* @alias model.countDocuments
+		*/
+		model.count = function(query) {
+			return model.countDocuments(query);
+		};
+
+
 		// Debugging enabled? Strap a debugging prefix onto all doc access methods
 		if (debug.enabled || process.env.DEBUG) {
 			['count', 'create', 'deleteMany', 'deleteOne', 'findOneAndUpdate', 'insert', 'insertOne', 'insertMany', 'meta', ,'updateMany', 'updateOne', 'upsert']

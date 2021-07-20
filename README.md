@@ -214,6 +214,11 @@ Create a Express compatible middleware backend which functions as a ReST server.
 This is an alternate method to call `mongoosy.models.MODEL.serve(options)` with an explicit model.
 
 
+mongoosy.models.MODEL.count(query)
+----------------------------------
+Alias for `MODEL.countDocuments(query)` which doesn't throw a warning.
+
+
 mongoosy.models.MODEL.upsert(body, options)
 -------------------------------------------
 Wrapper around `mongoosy.models.MODEL.update()` which makes upserts behave a bit more obviously than using the $upsert property within an update query.
