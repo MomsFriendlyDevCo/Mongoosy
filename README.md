@@ -1,28 +1,7 @@
 @MomsFriendlyDevCo/Mongoosy
 ===========================
-The Mongoose module but with some quality-of-life additions:
+The Mongoose module but with some quality-of-life additions.
 
-**Must haves:**
-* [x] ObjectIds are automatically strings
-* [x] ObjectIds are always convered back to OIDs when saving to the database
-* [x] Schema types can be strings
-* [ ] `meta()` compatibility
-* [x] Express ReST server
-* [x] Middleware compatibility
-* [x] Connect with sane defaults
-* [x] Pointer schema type
-* [x] `model.insert()` / `model.insertOne()` (alias of `model.create()`)
-* [x] `mongoosy.scenario()`
-* [ ] Iterators
-* [ ] Search compatibility
-* [ ] Hooks (+late binding hooks)
-
-
-**Nice to haves:**
-* [ ] Works with the MongoSh shell command
-* [x] Automatic field surpression (fields prefixed with '_')
-* [x] `DEBUG` env variable compatibility
-* [x] Version incrementing
 
 
 Differences from Mongoose
