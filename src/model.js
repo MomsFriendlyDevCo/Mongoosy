@@ -10,19 +10,6 @@ module.exports = function(mongoosy) {
 		// Create insert / insertOne aliases
 		model.insert = model.insertOne = model.create;
 
-		// Debugging enabled? Strap a debugging prefix onto all doc access methods
-		if (debug.enabled || process.env.DEBUG) {
-			['count', 'create', 'deleteMany', 'deleteOne', 'findOneAndUpdate', 'insert', 'insertOne', 'insertMany', 'updateMany', 'updateOne']
-				.forEach(method => {
-					var originalMethod = model[method];
-					model[method] = function(...args) {
-						debug(method, ...args);
-						Debug(`mongoosy:${method}`)(...args);
-						return originalMethod.call(this, ...args);
-					};
-				});
-		}
-
 		/**
 		* Add .meta() method to model which supplies a basic breakdown on the layout of a model
 		* @param {Object} [options] Additional options
@@ -167,7 +154,7 @@ module.exports = function(mongoosy) {
 			if (_.isEmpty(settings.by)) throw new Error('Empty {by} option in model.upsert(body, {options: {by: String|Array}})');
 			// }}}
 
-			var queryBy = _.pickBy(body, settings.by);
+			var queryBy = _.pick(body, settings.by);
 			if (Object.keys(queryBy).length < settings.by.length)
 				throw new Error(`Upsert {by} keys must be present in the document body in model.upsert(body, options) - keys missing from body: ${settings.by.filter(b => !_.has(body, b)).join(', ')}`);
 
@@ -176,7 +163,7 @@ module.exports = function(mongoosy) {
 				body,
 				{
 					..._.omit(settings, 'by'),
-					$upsert: true,
+					upsert: true,
 				},
 			)
 				.then(rawResult => settings.result
@@ -184,5 +171,19 @@ module.exports = function(mongoosy) {
 					: rawResult
 				)
 		};
+
+
+		// Debugging enabled? Strap a debugging prefix onto all doc access methods
+		if (debug.enabled || process.env.DEBUG) {
+			['count', 'create', 'deleteMany', 'deleteOne', 'findOneAndUpdate', 'insert', 'insertOne', 'insertMany', 'meta', ,'updateMany', 'updateOne', 'upsert']
+				.forEach(method => {
+					var originalMethod = model[method];
+					model[method] = function(...args) {
+						debug(method, ...args);
+						Debug(`mongoosy:${method}`)(...args);
+						return originalMethod.call(this, ...args);
+					};
+				});
+		}
 	});
 };
