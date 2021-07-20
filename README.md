@@ -222,6 +222,16 @@ Wrapper around `mongoosy.models.MODEL.update()` which makes upserts behave a bit
 
 `options` can be either an Object (in which case it matches the below specification), an array or string (in which case it is assumed to populate `options.by`).
 
+
+```javascript
+mongoosy.models.users.upsert({
+	name: 'Joe Random',
+	email: 'joe@random.com',
+}, ['email'])
+	.then(doc => ... Existing or newly created user matching "email" field)
+```
+
+
 Options are:
 
 | Option   | Type               | Default | Description                                                                                         |
