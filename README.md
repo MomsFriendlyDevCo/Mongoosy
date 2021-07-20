@@ -214,6 +214,23 @@ Create a Express compatible middleware backend which functions as a ReST server.
 This is an alternate method to call `mongoosy.models.MODEL.serve(options)` with an explicit model.
 
 
+mongoosy.models.MODEL.upsert(body, options)
+-------------------------------------------
+Wrapper around `mongoosy.models.MODEL.update()` which makes upserts behave a bit more obviously than using the $upsert property within an update query.
+
+`body` is the document body to insert (if not found) or update (if a matching document already exists).
+
+`options` can be either an Object (in which case it matches the below specification), an array or string (in which case it is assumed to populate `options.by`).
+
+Options are:
+
+| Option   | Type               | Default | Description                                                                                         |
+|----------|--------------------|---------|-----------------------------------------------------------------------------------------------------|
+| `by`     | `array` / `string` |         | How to match existing documents, if no match is found a new document is created from `body`         |
+| `result` | `boolean`          | `true`  | Return the created / updated document. Disable this if you just want to save and ignore the new doc |
+| `...`    | See Mongoose docs  |         | Other options passed to `MongooseModel.update()`                                                    |
+
+
 mongoosy.models.MODEL.meta(options)
 -----------------------------------
 Return frontend-safe meta information about the schema of a model.
