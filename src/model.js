@@ -167,8 +167,9 @@ module.exports = function(mongoosy) {
 			if (_.isEmpty(settings.by)) throw new Error('Empty {by} option in model.upsert(body, {options: {by: String|Array}})');
 			// }}}
 
-			var queryBy = _.pickBy(body, options.by);
-			if (!Object.keys(queryBy).length < settings.by.length) throw new Error('Upsert {by} keys must be present in the document body in model.upsert(body, options)');
+			var queryBy = _.pickBy(body, settings.by);
+			if (Object.keys(queryBy).length < settings.by.length)
+				throw new Error(`Upsert {by} keys must be present in the document body in model.upsert(body, options) - keys missing from body: ${settings.by.filter(b => !_.has(body, b)).join(', ')}`);
 
 			return model.updateOne(
 				queryBy, // Pass in query against existing document keys
