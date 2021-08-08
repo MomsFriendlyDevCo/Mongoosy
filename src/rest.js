@@ -44,10 +44,10 @@ module.exports = function MongoosyRest(mongoosy, options) {
 	* @param {Mongoosymodel|string} model Mongoosymodel to link against (or its name)
 	* @param {Object} [options] Options object
 	* @param {boolean|array <function>|function} [options.get=true] Enable getting of records or specify middleware(s) to execute beforehand
-	* @param {function <Promise>|function} [options.getMap] Function to use post-get to mangle a single document in a get (overrides `selectHidden`). Called as `(MongooseDocument)`
+	* @param {function <Promise>|function} [options.getMap] Function to use post-get to mangle a single document in a get (overrides `selectHidden`). Called as `(MongooseDocument, req)`
 	* @param {boolean|array <function>|function} [options.query=true] Enable querying of records or specify middleware(s) to execute beforehand
 	* @param {object|function <Promise>|function} [options.queryForce] Override the incomming req.query object with either a static object or an evaluated promise returns. Called as `(req)`
-	* @param {function <Promise>|function} [options.queryMap] Function to use post-query to mangle outgoing documents (overrides `selectHidden`). Called as `(MongooseDocument)`
+	* @param {function <Promise>|function} [options.queryMap] Function to use post-query to mangle outgoing documents (overrides `selectHidden`). Called as `(MongooseDocument, req)`
 	* @param {function <Promise>|function} [options.queryValidate] Validate an incomming query, similar to `queryForce`. Throw an error to reject. Called as `(req)`.
 	* @param {boolean|array <function>|function} [options.count=true] Enable counting of records or specify middleware(s) to execute beforehand
 	* @param {string} [options.countParam="count"] Special case URL suffix to identify that we are performating a count operation and not looking up an ID
@@ -59,7 +59,7 @@ module.exports = function MongoosyRest(mongoosy, options) {
 	* @param {string} [options.metaParam="meta"] Special case URL suffix to identify that we are performating a meta operation and not looking up an ID
 	* @param {boolean|array <function>|function} [options.search=false] Enable searching of records or specify middleware(s) to execute beforehand
 	* @param {string} [options.searchId="_id"] What field to search by when fetching / updating / deleting documents
-	* @param {function <Promise>|function} [options.searchMap] Function to use post-search-query to mangle outgoing documents (overrides `selectHidden`). Called as `(MongooseDocument)`
+	* @param {function <Promise>|function} [options.searchMap] Function to use post-search-query to mangle outgoing documents (overrides `selectHidden`). Called as `(MongooseDocument, req)`
 	* @param {string} [options.searchParam="q"] Special case URL querystring to identify that we are performating a search operation and not looking up an ID
 	* @param {string} [options.param="id"] Where to look in req.params for the document ID to get/update/delete
 	* @param {boolean} [selectHidden=false] Automatically surpress all output fields prefixed with '_'
@@ -211,7 +211,9 @@ module.exports = function MongoosyRest(mongoosy, options) {
 					* This has no function if settings.selectHidden is enabled, if not it hides all `_` prefixed fields
 					*/
 					var docMap =
-						serverMethod == 'get' && settings.queryGet ? settings.getMap
+						serverMethod == 'get' && settings.queryGet && settings.queryGet === 'queryMap' ? settings.queryMapMap
+						: serverMethod == 'get' && settings.queryGet ? settings.getMap
+						: serverMethod == 'query' && settings.queryMap && settings.queryMap === 'getMap' ? settings.getMap
 						: serverMethod == 'query' && settings.queryMap ? settings.queryMap
 						: doc => { // Default behaviour - hide all `_` prefixed fields if settings.selectHidden is enabled
 							if (settings.selectHidden) return doc.toObject(); // No rewrite needed
@@ -233,7 +235,7 @@ module.exports = function MongoosyRest(mongoosy, options) {
 							// FIXME: This select does not hold, debug logs say all fields are explicitly selected
 							.select(req.query.select ? req.query.select.split(/[\s\,]+/).join(' ') : undefined)
 							.then(doc => {
-								if (doc) return docMap(doc);
+								if (doc) return docMap(doc, req);
 								res.sendStatus(404);
 								return;
 							})
@@ -244,11 +246,11 @@ module.exports = function MongoosyRest(mongoosy, options) {
 							.sort(req.query.sort)
 							.limit(parseInt(req.query.limit))
 							.skip(parseInt(req.query.skip))
-							.then(docs => Promise.all(docs.map(doc => docMap(doc))))
+							.then(docs => Promise.all(docs.map(doc => docMap(doc, req))))
 							.catch(e => settings.errorHandler(res, 400, e))
 
 						case 'search': return model.search(req.query[settings.searchParam])
-							.then(docs => Promise.all(docs.map(doc => docMap(doc))))
+							.then(docs => Promise.all(docs.map(doc => docMap(doc, req))))
 							.catch(e => settings.errorHandler(res, 400, e))
 
 
@@ -263,7 +265,7 @@ module.exports = function MongoosyRest(mongoosy, options) {
 								return doc.save();
 							})
 							.then(doc => {
-								if (doc) return docMap(doc);
+								if (doc) return docMap(doc, req);
 								return settings.errorHandler(res, 404, 'Document not found when performing update');
 							})
 							.catch(e => {
