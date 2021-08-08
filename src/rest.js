@@ -211,8 +211,8 @@ module.exports = function MongoosyRest(mongoosy, options) {
 					* This has no function if settings.selectHidden is enabled, if not it hides all `_` prefixed fields
 					*/
 					var docMap =
-						serverMethod == 'get' && settings.queryGet && settings.queryGet === 'queryMap' ? settings.queryMapMap
-						: serverMethod == 'get' && settings.queryGet ? settings.getMap
+						serverMethod == 'get' && settings.getMap && settings.getMap === 'queryMap' ? settings.queryMap
+						: serverMethod == 'get' && settings.getMap ? settings.getMap
 						: serverMethod == 'query' && settings.queryMap && settings.queryMap === 'getMap' ? settings.getMap
 						: serverMethod == 'query' && settings.queryMap ? settings.queryMap
 						: doc => { // Default behaviour - hide all `_` prefixed fields if settings.selectHidden is enabled
