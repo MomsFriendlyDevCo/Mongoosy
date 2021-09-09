@@ -106,31 +106,37 @@ module.exports = function MongoosyRest(mongoosy, options) {
 
 		debug('Setup ReST middleware for model', model.modelName);
 		return (req, res) => {
-			var serverMethod;
+			let serverMethod;
+
+			// Work out method to use (GET /api/:id -> 'get', POST /api/:id -> 'save' etc.)
+			const getServerMethod = () => {
+				let method;
+				if (req.method == 'GET' && settings.countParam && req.params[settings.param] && req.params[settings.param] == settings.countParam) { // Count matches
+					method = 'count';
+				} else if (req.method == 'GET' && settings.metaParam && req.params[settings.param] && req.params[settings.param] == settings.metaParam) { // Return meta information
+					method = 'meta';
+				} else if (req.method == 'GET' && req.params[settings.param] != undefined) { // Get one document
+					method = 'get';
+				} else if (model.search != undefined && req.method == 'GET' && req.query[settings.searchParam] != undefined) { // Search documents (given a search querystring)
+					method = 'search';
+				} else if (req.method == 'GET') { // List all documents (filtered via req.query)
+					method = 'query';
+				} else if (req.method == 'POST' && req.params[settings.param] != undefined) { // Update an existing document
+					method = 'save';
+				} else if (req.method == 'POST') { // Create a new document (from req.body)
+					method = 'create';
+				} else if (req.method == 'DELETE' && req.params[settings.param] != undefined) { // Delete one document
+					method = 'delete';
+				} else {
+					throw new Error('Unknown endpoint');
+				}
+				return method;
+			};
 
 			Promise.resolve()
 				// Determine serverMethod {{{
-				.then(()=> { // Work out method to use (GET /api/:id -> 'get', POST /api/:id -> 'save' etc.)
-					if (req.method == 'GET' && settings.countParam && req.params[settings.param] && req.params[settings.param] == settings.countParam) { // Count matches
-						serverMethod = 'count';
-					} else if (req.method == 'GET' && settings.metaParam && req.params[settings.param] && req.params[settings.param] == settings.metaParam) { // Return meta information
-						serverMethod = 'meta';
-					} else if (req.method == 'GET' && req.params[settings.param] != undefined) { // Get one document
-						serverMethod = 'get';
-					} else if (model.search != undefined && req.method == 'GET' && req.query[settings.searchParam] != undefined) { // Search documents (given a search querystring)
-						serverMethod = 'search';
-					} else if (req.method == 'GET') { // List all documents (filtered via req.query)
-						serverMethod = 'query';
-					} else if (req.method == 'POST' && req.params[settings.param] != undefined) { // Update an existing document
-						serverMethod = 'save';
-					} else if (req.method == 'POST') { // Create a new document (from req.body)
-						serverMethod = 'create';
-					} else if (req.method == 'DELETE' && req.params[settings.param] != undefined) { // Delete one document
-						serverMethod = 'delete';
-					} else {
-						throw new Error('Unknown endpoint');
-					}
-
+				.then(()=> {
+					serverMethod = getServerMethod();
 					if (settings[serverMethod] === false) throw new Error('Not found'); // Endpoint is disabled
 				})
 				// }}}
@@ -192,6 +198,11 @@ module.exports = function MongoosyRest(mongoosy, options) {
 					} else {
 						throw new Error('Unknown middleware structure');
 					}
+				})
+				// }}}
+				// Re-Determine serverMethod {{{
+				.then(()=> { // It may have changed during middleware mutations
+					serverMethod = getServerMethod();
 				})
 				// }}}
 				// Execute function and return (main query handler - GET, POST etc.) {{{
