@@ -88,12 +88,15 @@ module.exports = function MongoosyScenario(mongoosy, input, options) {
 			).then(()=> blob);
 		})
 		.then(blob => _.flatMap(blob, (items, collection) => { // Flatten objects into array
-			return items.map(item => ({
-				id: item.$,
-				needs: scanDoc(item),
-				collection,
-				item: _.omit(item, '$'),
-			}));
+			return items.map(item => {
+				if (item.$ && !item.$.startsWith('$')) throw new Error(`All item '$' references must have a value that starts with '$' - given "${item.$}"`);
+				return {
+					id: item.$,
+					needs: options?.stub ? [] : scanDoc(item), // Calculate document pre-requisite needs if not in stub mode
+					collection,
+					item: _.omit(item, '$'),
+				};
+			});
 		}), [])
 		.then(blob => {
 			var queue = blob;

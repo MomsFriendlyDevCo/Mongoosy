@@ -2,7 +2,7 @@ module.exports = {
 	// Users {{{
 	users: [
 		{
-			$: 'users.joe',
+			$: '$users.joe',
 			name: 'Joe Random',
 			status: 'active',
 			company: '$company.acme',
@@ -14,7 +14,7 @@ module.exports = {
 			_password: 'ue', // INPUT: flume
 		},
 		{
-			$: 'users.jane',
+			$: '$users.jane',
 			name: 'Jane Quark',
 			status: 'active',
 			company: '$company.acme',
@@ -26,7 +26,7 @@ module.exports = {
 			_password: 'oeaeoeae', // INPUT: correct battery horse staple
 		},
 		{
-			$: 'users.bob',
+			$: '$users.bob',
 			name: 'Bob Bobart',
 			status: 'unverified',
 			company: '$company.acme',
@@ -38,7 +38,7 @@ module.exports = {
 			_password: 'ao', // INPUT: password
 		},
 		{
-			$: 'users.dick',
+			$: '$users.dick',
 			name: 'Dick deleteed',
 			status: 'deleted',
 			company: '$company.aperture',
@@ -50,7 +50,7 @@ module.exports = {
 			_password: 'ao', // INPUT: password
 		},
 		{
-			$: 'users.vallery',
+			$: '$users.vallery',
 			name: 'Vallery Unverrifed',
 			status: 'unverified',
 			company: '$company.aperture',
@@ -62,7 +62,7 @@ module.exports = {
 			_password: 'ao', // INPUT: password
 		},
 		{
-			$: 'users.don',
+			$: '$users.don',
 			name: 'Don Delete',
 			status: 'deleted',
 			company: '$company.acme',
@@ -74,7 +74,7 @@ module.exports = {
 			_password: 'ao', // INPUT: password
 		},
 		{
-			$: 'users.adam',
+			$: '$users.adam',
 			name: 'Adam Admin',
 			status: 'active',
 			company: '$company.acme',
@@ -106,7 +106,7 @@ module.exports = {
 	// Widgets {{{
 	widgets: [
 		{
-			$: 'widget-crash',
+			$: '$widget-crash',
 			created: '2016-06-23T10:23:42Z',
 			name: 'Widget crash',
 			content: 'This is the crash widget',
@@ -115,7 +115,7 @@ module.exports = {
 			averageOrderSize: 2,
 		},
 		{
-			$: 'widget-bang',
+			$: '$widget-bang',
 			created: '2016-01-27T19:17:04Z',
 			name: 'Widget bang',
 			content: 'This is the bang widget',
@@ -123,7 +123,7 @@ module.exports = {
 			averageOrderSize: 4,
 		},
 		{
-			$: 'widget-whollop',
+			$: '$widget-whollop',
 			created: '2016-03-19T17:43:21',
 			name: 'Widget whollop',
 			content: 'This is the whollop widget',
