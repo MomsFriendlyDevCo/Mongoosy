@@ -51,6 +51,10 @@ describe('mongoosy.Rest', function() {
 			save: true,
 			delete: true,
 			meta: true,
+			errorHandler(res, code, text) {
+				console.warn('Error code', code, 'thrown by server:', text);
+				res.status(code).send(text);
+			},
 		}));
 		app.use('/api/users/:id?', mongoosy.models.users.serve());
 		server = app.listen(port, null, finish);
