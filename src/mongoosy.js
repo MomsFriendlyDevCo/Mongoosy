@@ -48,8 +48,6 @@ class Mongoosy extends mongoose.Mongoose {
 			uri: _.isString(uri) ? uri : options.uri,
 
 			// "depreciated feature" surpression - assume sane Mongoose connection options in all cases
-			useCreateIndex: true,
-			useFindAndModify: false,
 			useNewUrlParser: true,
 			useUnifiedTopology: true,
 
