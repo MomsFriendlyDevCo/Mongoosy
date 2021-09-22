@@ -220,7 +220,6 @@ module.exports = function MongoosyRest(mongoosy, options) {
 							return _.pickBy(doc.toObject(), (v, k) => settings.neverHidden.includes(k) || !k.startsWith('_'));
 						};
 
-					// FIXME: Are there cases here which should call `exec()` instead of relying on a single `then`?
 					switch (serverMethod) {
 						case 'count': return model.countDocuments(attemptParse(removeMetaParams(req.query)))
 							.then(count => ({count}))
@@ -232,7 +231,6 @@ module.exports = function MongoosyRest(mongoosy, options) {
 						case 'get': return model.findOne({
 								[settings.searchId]: req.params[settings.param],
 							})
-							// FIXME: This select does not hold, debug logs say all fields are explicitly selected
 							.select(req.query.select ? req.query.select.split(/[\s\,]+/).join(' ') : undefined)
 							.then(doc => {
 								if (doc) return docMap(doc, req);
@@ -258,8 +256,6 @@ module.exports = function MongoosyRest(mongoosy, options) {
 
 						case 'save': return model.findById(req.params[settings.param])
 							.then(doc => { // Mutate existing document while dirtying top-level keys.
-								// FIXME: This pattern failed to touch root-level setters.
-								//_.merge(doc, _.omit(req.body, ['_id', '__v']));
 								delete req.body.__v;
 								for (var k in req.body) {
 									doc[k] = req.body[k];
