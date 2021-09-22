@@ -1,6 +1,7 @@
 var _ = require('lodash');
 var debug  = require('debug')('mongoosy:scenario');
 var glob = require('globby');
+var {Types} = require('mongoose');
 
 
 /**
@@ -18,7 +19,7 @@ var scanDoc = (doc, lookup = {}) => {
 			Object.keys(node).forEach(k => k != '$' && scanNode(node[k], path.concat(k)));
 		} else if (_.isString(node) && node.startsWith('$') && node.length > 1) {
 			if (lookup[node]) {
-				_.set(doc, path, lookup[node]);
+				_.set(doc, path, new Types.ObjectId(lookup[node]));
 			} else {
 				unresolved.push(node)
 			}
@@ -35,7 +36,8 @@ var scanDoc = (doc, lookup = {}) => {
 * @param {Object|string|array <string|object>} input Either a JS object(s) or a file glob (or array of globs) to process
 * @param {Object} [options] Additional options
 * @param {Object} [options.glob] Additional options to pass to globby
-* @param {boolean} [nuke=false] Whether to erase / rebuild existing collections before replacing them entirely
+* @param {boolean} [options.circular=false] Try to create stub documents in the first cycle, thus ensuring they always exists. This fixes recursive/graph-like data structures at the cost of speed
+* @param {boolean} [options.nuke=false] Whether to erase / rebuild existing collections before replacing them entirely
 * @param {number} [options.threads=3] How many documents to attempt to create at once
 * @param {function <Promise>} [options.postRead] Manipulate the merged scenario object before processing, called as (tree) where each key is the model and all keys are an array of items, expected to return the changed tree
 * @param {function} [options.postCreate] Function called whenever a document is created under a model, called as (model, count) where model is a string and count the number created for that model so far
@@ -81,49 +83,88 @@ module.exports = function MongoosyScenario(mongoosy, input, options) {
 			debug('Dropping collections:', _.keys(blob).join(', '));
 
 			return Promise.all(
-				_.keys(blob)
-					.map(m => Promise.resolve()
-						.then(()=> mongoosy.models[m].deleteMany())
-					)
-			).then(()=> blob);
+				Object.keys(blob)
+					.map(m => mongoosy.models[m].deleteMany({}))
+			)
+				.then(()=> debug('Collections dropped'))
+				.then(()=> blob);
 		})
 		.then(blob => _.flatMap(blob, (items, collection) => { // Flatten objects into array
 			return items.map(item => {
 				if (item.$ && !item.$.startsWith('$')) throw new Error(`All item '$' references must have a value that starts with '$' - given "${item.$}"`);
 				return {
 					id: item.$,
-					needs: options?.stub ? [] : scanDoc(item), // Calculate document pre-requisite needs if not in stub mode
+					needs: options?.circular ? [] : scanDoc(item), // Calculate document pre-requisite needs if not in circular mode
 					collection,
 					item: _.omit(item, '$'),
 				};
 			});
 		}), [])
-		.then(blob => {
-			var queue = blob;
+		.then(queue => {
 			var lookup = {};
+			if (!options?.circular) return {queue, lookup}; // Not stubbing
+			debug('Create stubs');
+
+			// Create empty records for all items with an ID
+			return mongoosy.utils.promiseAllLimit(options?.threads ?? 3,
+				queue
+					.filter(item => item.id)
+					.map(item => ()=>
+						mongoosy.models[item.collection].insertOne({temp: true})
+							.then(created => {
+								item.stub = true;
+								lookup[item.id] = created._id;
+							})
+					)
+			)
+				.then(()=> {
+					debug('Created', Object.keys(lookup).length, 'stubs');
+
+					queue.forEach(q => scanDoc(q.item, lookup)); // Map all stub IDs into the documents
+
+					return {queue, lookup};
+				})
+		})
+		.then(({queue, lookup}) => {
 			var scenarioCycle = 0;
 			var modelCounts = {};
 
+			debug('Entering main Try/Create cycle');
 			var tryCreate = ()=>
-				mongoosy.utils.promiseAllLimit(options && options.threads ? options.threads : 3, queue.map(item => ()=> {
+				mongoosy.utils.promiseAllLimit(options?.threads ?? 3, queue.map(item => ()=> {
 					if (item.needs.length > 0) return; // Cannot create at this stage
 					if (!mongoosy.models[item.collection]) throw new Error(`Cannot create item in non-existant or model "${item.collection}"`);
 
-					return mongoosy.models[item.collection].insertOne(item.item)
-						.then(created => {
-							// Stash ID?
-							if (item.id) lookup[item.id] = created._id;
-							item.created = true;
+					if (item.stub) { // Item was stubbed in previous stage - update its content if we can
+						return mongoosy.models[item.collection].findByIdAndUpdate(lookup[item.id], item.item, {lean: true})
+							.then(()=> {
+								item.created = true;
+								if (options?.postCreate || options?.postStats) {
+									modelCounts[item.collection] = modelCounts[item.collection] ? ++modelCounts[item.collection] : 1;
+									if (options.postCreate) options.postCreate(item.collection, modelCounts[item.collection]);
+								}
+							})
+							.catch(e => {
+								debug('Error when updating stub doc', item.collection, 'using spec', item.item, 'Error:', e);
+								throw e;
+							});
+					} else {
+						return mongoosy.models[item.collection].insertOne(item.item)
+							.then(created => {
+								// Stash ID?
+								if (item.id) lookup[item.id] = created._id;
+								item.created = true;
 
-							if (options && (options.postCreate || options.postStats)) {
-								modelCounts[item.collection] = modelCounts[item.collection] ? ++modelCounts[item.collection] : 1;
-								if (options.postCreate) options.postCreate(item.collection, modelCounts[item.collection]);
-							}
-						})
-						.catch(e => {
-							debug('Error when creating doc', item.collection, 'using spec', item.item, 'Error:', e);
-							throw e;
-						});
+								if (options?.postCreate || options?.postStats) {
+									modelCounts[item.collection] = modelCounts[item.collection] ? ++modelCounts[item.collection] : 1;
+									if (options.postCreate) options.postCreate(item.collection, modelCounts[item.collection]);
+								}
+							})
+							.catch(e => {
+								debug('Error when creating doc', item.collection, 'using spec', item.item, 'Error:', e);
+								throw e;
+							});
+					}
 				}))
 				.then(()=> { // Filter queue to non-created items
 					var newQueue = queue.filter(item => !item.created);
