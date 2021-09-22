@@ -242,8 +242,8 @@ module.exports = function MongoosyRest(mongoosy, options) {
 						case 'query': return model.find(attemptParse(removeMetaParams(req.query)))
 							.select(req.query.select ? req.query.select.split(/[\s\,]+/).join(' ') : undefined)
 							.sort(req.query.sort)
-							.limit(parseInt(req.query.limit))
-							.skip(parseInt(req.query.skip))
+							.limit(req.query.limit ? parseInt(req.query.limit) : undefined)
+							.skip(req.query.skip ? parseInt(req.query.skip) : undefined)
 							.then(docs => Promise.all(docs.map(doc => docMap(doc, req))))
 							.catch(e => settings.errorHandler(res, 400, e))
 
