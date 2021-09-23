@@ -110,8 +110,8 @@ module.exports = function MongoosyScenario(mongoosy, input, options) {
 				queue
 					.filter(item => item.id)
 					.map(item => ()=>
-						mongoosy.models[item.collection].insertOne({temp: true})
-							.then(created => {
+						mongoosy.models[item.collection].create([{}], {validateBeforeSave: false}) // Insert without validation (skips {required: true} specs)
+							.then(([created]) => {
 								item.stub = true;
 								lookup[item.id] = created._id;
 							})

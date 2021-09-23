@@ -13,7 +13,7 @@ describe('mongoosy.Scenario', function() {
 
 		return Promise.resolve()
 			.then(()=> mongoosy.schema('cats', {
-				name: String,
+				name: {type: String, required: true},
 				bestFriend: {type: 'oid'},
 			}))
 			.then(()=> mongoosy.compileModels())
