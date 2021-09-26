@@ -186,6 +186,11 @@ Options:
 | `postCreate` | `function` |         | Function called whenever a document is created under a model, called as (model, count) where model is a string and count the number created for that model so far             |
 | `postStats`  | `function` |         | Called when complete as (stats) where each key is the model and the value is the number of documents created                                                                  |
 
+**Circular mode**
+Switching on `circular: true` enables stubbed-document mode which allows resolving complex circular, graph-like scenarios where a document can point at another and that in turn can point back to the original. These structures would need a non-circular tree like dependency if stubbing were disabled.
+Stubbing creates empty documents for all items with an ID in the first cycle, then goes back and fills in their content later.
+Because of this the process is slow (requiring insert + update as two distinct steps rather than one insert) but it does mean that circular dependencies are supported out of the box.
+
 
 
 mongoosy.serve(model, options)

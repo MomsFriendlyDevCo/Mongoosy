@@ -37,6 +37,7 @@ var scanDoc = (doc, lookup = {}) => {
 * @param {Object} [options] Additional options
 * @param {Object} [options.glob] Additional options to pass to globby
 * @param {boolean} [options.circular=false] Try to create stub documents in the first cycle, thus ensuring they always exists. This fixes recursive/graph-like data structures at the cost of speed
+* @param {boolean} [options.circularIndexDisable=true] Remove all indexes from the affected models before stubbing then re-implement them after - fixes `{required: true}` stub items
 * @param {boolean} [options.nuke=false] Whether to erase / rebuild existing collections before replacing them entirely
 * @param {number} [options.threads=3] How many documents to attempt to create at once
 * @param {function <Promise>} [options.postRead] Manipulate the merged scenario object before processing, called as (tree) where each key is the model and all keys are an array of items, expected to return the changed tree
@@ -45,6 +46,18 @@ var scanDoc = (doc, lookup = {}) => {
 * @returns {Promise} A promise which will resolve when the input data has been processed
 */
 module.exports = function MongoosyScenario(mongoosy, input, options) {
+	var settings = {
+		glob: undefined,
+		circular: false,
+		circularIndexDisable: true,
+		nuke: false,
+		threads: 3,
+		postRead: undefined,
+		postCreate: undefined,
+		postStats: undefined,
+		...options,
+	};
+
 	return Promise.resolve()
 		.then(()=> Promise.all(_.castArray(input).map(item => {
 			if (_.isString(item)) {
@@ -67,10 +80,10 @@ module.exports = function MongoosyScenario(mongoosy, input, options) {
 			return t;
 		}, {}))
 		.then(blob => {
-			if (!options || !options.postRead) return blob;
+			if (!settings.postRead) return blob;
 
 			// Call postRead and wait for response
-			return options.postRead(blob);
+			return Promise.resolve(settings.postRead(blob)).then(()=> blob);
 		})
 		.then(blob => {
 			_.forEach(blob, (v, k) => {
@@ -78,32 +91,55 @@ module.exports = function MongoosyScenario(mongoosy, input, options) {
 			});
 			return blob;
 		})
-		.then(blob => {
-			if (!options || !options.nuke) return blob;
-			debug('Dropping collections:', _.keys(blob).join(', '));
+		.then(blob => { // Process each model we will operate on
+			var rebuildIndexes = {}; // Model => Indexes[] spec to rebuild later if in circular mode
 
 			return Promise.all(
 				Object.keys(blob)
-					.map(m => mongoosy.models[m].deleteMany({}))
+					.map(m => Promise.resolve()
+						.then(()=> {
+							if (!settings.nuke) return;
+							debug('STAGE: Clearing collection', m);
+							return mongoosy.models[m].deleteMany({})
+						})
+						.then(()=> {
+							if (!settings.circular || !settings.circularIndexDisable) return; // Skip index manipulation if disabled
+							debug('STAGE: Temporarily drop indexes');
+							return Promise.resolve()
+								.then(()=> mongoosy.models[m].syncIndexes({background: false})) // Let Mongoosy catch up to index spec
+								.then(()=> mongoosy.models[m].listIndexes())
+								.then(indexes => {
+									rebuildIndexes[m] = indexes.filter(index => !_.isEqual(index.key, {_id: 1})) // Ignore meta _id field
+									debug(`Will drop indexes on db.${m}:`, rebuildIndexes[m].map(i => i.name).join(', '));
+
+									// Tell the mongo driver to drop the indexes we don't care about
+									return Promise.all(rebuildIndexes[m].map(index =>
+										mongoosy.models[m].collection.dropIndex(index.name)
+									))
+								})
+						})
+					)
 			)
-				.then(()=> debug('Collections dropped'))
-				.then(()=> blob);
+				.then(()=> ({blob, rebuildIndexes}));
 		})
-		.then(blob => _.flatMap(blob, (items, collection) => { // Flatten objects into array
-			return items.map(item => {
-				if (item.$ && !item.$.startsWith('$')) throw new Error(`All item '$' references must have a value that starts with '$' - given "${item.$}"`);
-				return {
-					id: item.$,
-					needs: options?.circular ? [] : scanDoc(item), // Calculate document pre-requisite needs if not in circular mode
-					collection,
-					item: _.omit(item, '$'),
-				};
-			});
-		}), [])
-		.then(queue => {
+		.then(({blob, rebuildIndexes}) => ({
+			rebuildIndexes,
+			queue: _.flatMap(blob, (items, collection) => { // Flatten objects into array
+				return items.map(item => {
+						if (item.$ && !item.$.startsWith('$')) throw new Error(`All item '$' references must have a value that starts with '$' - given "${item.$}"`);
+						return {
+							id: item.$,
+							needs: options?.circular ? [] : scanDoc(item), // Calculate document pre-requisite needs if not in circular mode
+							collection,
+							item: _.omit(item, '$'),
+						};
+					});
+			}),
+		}))
+		.then(({queue, rebuildIndexes}) => {
 			var lookup = {};
-			if (!options?.circular) return {queue, lookup}; // Not stubbing
-			debug('Create stubs');
+			if (!options?.circular) return {queue, lookup, rebuildIndexes}; // Not stubbing
+			debug('STAGE: Create stubs');
 
 			// Create empty records for all items with an ID
 			return mongoosy.utils.promiseAllLimit(options?.threads ?? 3,
@@ -122,16 +158,16 @@ module.exports = function MongoosyScenario(mongoosy, input, options) {
 
 					queue.forEach(q => scanDoc(q.item, lookup)); // Map all stub IDs into the documents
 
-					return {queue, lookup};
+					return {queue, lookup, rebuildIndexes};
 				})
 		})
-		.then(({queue, lookup}) => {
+		.then(({queue, lookup, rebuildIndexes}) => {
 			var scenarioCycle = 0;
 			var modelCounts = {};
 
-			debug('Entering main Try/Create cycle');
-			var tryCreate = ()=>
-				mongoosy.utils.promiseAllLimit(options?.threads ?? 3, queue.map(item => ()=> {
+			var tryCreate = ()=> Promise.resolve()
+				.then(()=> debug(`STAGE: Try/Create cycle #${scenarioCycle}`))
+				.then(()=> mongoosy.utils.promiseAllLimit(options?.threads ?? 3, queue.map(item => ()=> {
 					if (item.needs.length > 0) return; // Cannot create at this stage
 					if (!mongoosy.models[item.collection]) throw new Error(`Cannot create item in non-existant or model "${item.collection}"`);
 
@@ -141,7 +177,7 @@ module.exports = function MongoosyScenario(mongoosy, input, options) {
 								item.created = true;
 								if (options?.postCreate || options?.postStats) {
 									modelCounts[item.collection] = modelCounts[item.collection] ? ++modelCounts[item.collection] : 1;
-									if (options.postCreate) options.postCreate(item.collection, modelCounts[item.collection]);
+									if (settings.postCreate) settings.postCreate(item.collection, modelCounts[item.collection]);
 								}
 							})
 							.catch(e => {
@@ -157,7 +193,7 @@ module.exports = function MongoosyScenario(mongoosy, input, options) {
 
 								if (options?.postCreate || options?.postStats) {
 									modelCounts[item.collection] = modelCounts[item.collection] ? ++modelCounts[item.collection] : 1;
-									if (options.postCreate) options.postCreate(item.collection, modelCounts[item.collection]);
+									if (settings.postCreate) settings.postCreate(item.collection, modelCounts[item.collection]);
 								}
 							})
 							.catch(e => {
@@ -165,7 +201,7 @@ module.exports = function MongoosyScenario(mongoosy, input, options) {
 								throw e;
 							});
 					}
-				}))
+				})))
 				.then(()=> { // Filter queue to non-created items
 					var newQueue = queue.filter(item => !item.created);
 					if (newQueue.length > 0 && queue.length == newQueue.length) {
@@ -194,6 +230,20 @@ module.exports = function MongoosyScenario(mongoosy, input, options) {
 				.then(()=> queue.length && tryCreate())
 
 			return tryCreate()
-				.then(()=> options && options.postStats && options.postStats(modelCounts));
+				.then(()=> ({rebuildIndexes, modelCounts}))
 		})
+		.then(({rebuildIndexes, modelCounts}) => {
+			if (!settings.circular || !settings.circularIndexDisable) return {modelCounts}; // Skip index manipulation if disabled
+			debug('STAGE: Rebuild indexes')
+			return Promise.all(Object.keys(rebuildIndexes)
+				.map(modelName =>Promise.resolve()
+					.then(()=> debug(`Re-create indexes on db.${modelName}:`, rebuildIndexes[modelName].map(i => i.name).join(', ')))
+					.then(()=> mongoosy.models[modelName].collection.createIndexes(rebuildIndexes[modelName]))
+				)
+			)
+		})
+		.then(({modelCounts}) => {
+			debug('STAGE: Finish');
+			if (settings.postStats) settings.postStats(modelCounts)
+		});
 };
