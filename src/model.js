@@ -7,6 +7,9 @@ var debug = Debug('mongoosy');
 */
 module.exports = function(mongoosy) {
 	mongoosy.on('model', model => {
+		// Make `name` meta property
+		model.collectionName = model.collection.collectionName;
+
 		// Create insert / insertOne aliases
 		model.insert = model.insertOne = model.create;
 
@@ -189,8 +192,8 @@ module.exports = function(mongoosy) {
 				.forEach(method => {
 					var originalMethod = model[method];
 					model[method] = function(...args) {
-						debug(method, ...args);
-						Debug(`mongoosy:${method}`)(...args);
+						debug(method, model.collectionName, ...args);
+						Debug(`mongoosy:${method}`)(model.collectionName, ...args);
 						return originalMethod.call(this, ...args);
 					};
 				});

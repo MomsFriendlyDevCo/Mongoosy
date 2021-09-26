@@ -194,6 +194,11 @@ Create a Express compatible middleware backend which functions as a ReST server.
 This is an alternate method to call `mongoosy.models.MODEL.serve(options)` with an explicit model.
 
 
+mongoosy.models.MODEL.collectionName
+------------------------------------
+The actual, low-level database collection being interacted with.
+
+
 mongoosy.models.MODEL.count(query)
 ----------------------------------
 Alias for `MODEL.countDocuments(query)` which doesn't throw a warning.
