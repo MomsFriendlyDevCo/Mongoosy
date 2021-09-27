@@ -240,7 +240,7 @@ module.exports = function MongoosyScenario(mongoosy, input, options) {
 					.then(()=> debug(`Re-create indexes on db.${modelName}:`, rebuildIndexes[modelName].map(i => i.name).join(', ')))
 					.then(()=> mongoosy.models[modelName].collection.createIndexes(rebuildIndexes[modelName]))
 				)
-			)
+			).then(()=> ({modelCounts}))
 		})
 		.then(({modelCounts}) => {
 			debug('STAGE: Finish');
