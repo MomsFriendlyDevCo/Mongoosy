@@ -172,7 +172,12 @@ module.exports = function MongoosyScenario(mongoosy, input, options) {
 					if (!mongoosy.models[item.collection]) throw new Error(`Cannot create item in non-existant or model "${item.collection}"`);
 
 					if (item.stub) { // Item was stubbed in previous stage - update its content if we can
-						return mongoosy.models[item.collection].findByIdAndUpdate(lookup[item.id], item.item, {lean: true})
+						// NOTE: We can't use findByIdAndUpdate() (or similar) because they don't fire validators
+						return mongoosy.models[item.collection].findById(lookup[item.id])
+							.then(doc => {
+								Object.assign(doc, item.item);
+								return doc.save();
+							})
 							.then(()=> {
 								item.created = true;
 								if (options?.postCreate || options?.postStats) {
