@@ -305,8 +305,10 @@ module.exports = function MongoosyRest(mongoosy, options) {
 	* @param {Object} [options] Additional options to use, see the MongoosyRest for the full list of options
 	* @returns {MongoosyRest} A MongoosyRest express middleware factory
 	*/
-	mongoosy.serve = (model, options) =>
-		new mongoosy.Rest(mongoosy.models[model], options);
+	mongoosy.serve = (model, options) => {
+		if (!mongoosy.models[model]) throw new Error(`Trying to serve a non-existant ReST schema "${model}" - declare the schema first`);
+		return new mongoosy.Rest(mongoosy.models[model], options);
+	};
 	// }}}
 
 	// mongoosy.models.model.serve {{{
