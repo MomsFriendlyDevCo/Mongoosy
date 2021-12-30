@@ -109,6 +109,19 @@ mongoosy.schema('users')
 ```
 
 
+Schema use() middleware helper
+------------------------------
+The Schema model now also includes an easily chainable middleware function `use(helper, optons)` which can instantiate middleware when the model is eventually compiled.
+
+```javascript
+mongoosy.schema('users')
+	.use(someMongooseMiddleware, {foo: 'bar'})
+	// ... continue to chain other properties to the schema ... //
+```
+
+Each handler is a function which is called with the contents of the options object and the context being set to the now-instantiated model.
+
+
 Scenario support built in
 -------------------------
 Importing large datasets (with linked OIDs) is now supported as built-in functionality.

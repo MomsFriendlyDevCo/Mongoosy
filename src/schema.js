@@ -19,6 +19,15 @@ module.exports = class MongoosySchema extends mongoose.Schema {
 
 
 	/**
+	* Queued use() middleware functions to run when the model is compiled
+	* @type {array<Object>}
+	* @property {function} handler The handler function to run in each case
+	* @property {Object} Options Additional object to pass to the handler in each case
+	*/
+	middleware = [];
+
+
+	/**
 	* Wrap the default virtual declaration so that we can accept an object definition or a simple getter only
 	* @param {string} field Field to setup the virtual on
 	* @param {function|object} getter Either an object of the form `{get: Function, set:Function}` or the getter worker for a virtual
@@ -35,6 +44,20 @@ module.exports = class MongoosySchema extends mongoose.Schema {
 		} else {
 			super.virtual(field, getter);
 		}
+		return this;
+	};
+
+
+	/**
+	* Instanciate a function with the given options setting the context to the current compiled model when its loaded
+	* @param {function} handler Callback function to run when the model is ready
+	* @param {Object} [options] Additional options to pass to the callback when instanciating
+	* @returns {MongoosySchema} Chainable schema object
+	*/
+	use(handler, options = {}) {
+		if (typeof handler != 'function') throw new Error('First param to mongoosy.schema.use() must be a handler function');
+		if (options && typeof options != 'object') throw new Error('Second param to mongoosy.schema.use() must an options object or falsy');
+		this.middleware.push({handler, options});
 		return this;
 	};
 
