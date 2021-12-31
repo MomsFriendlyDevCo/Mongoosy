@@ -81,7 +81,7 @@ class Mongoosy extends mongoose.Mongoose {
 				.then(()=> this.models[id] = super.model(id, this.schemas[id]))
 				.then(()=> this.emit('model', this.models[id]))
 				.then(()=> this.utils.promiseAllLimit(1, this.schemas[id].middleware.map(middleware => ()=>
-					middleware.handler.call(this.models[id], middleware.options)
+					middleware.handler.call(this.models[id], this.models[id], middleware.options)
 				)))
 			)
 		)

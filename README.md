@@ -116,10 +116,11 @@ The Schema model now also includes an easily chainable middleware function `use(
 ```javascript
 mongoosy.schema('users')
 	.use(someMongooseMiddleware, {foo: 'bar'})
+	.use((model, options) => { /* ... do something with the compiled model + options object */ })
 	// ... continue to chain other properties to the schema ... //
 ```
 
-Each handler is a function which is called with the contents of the options object and the context being set to the now-instantiated model.
+Each handler is a function which is called as `(model, options)` with the context being set to the now-instantiated `model` object.
 
 
 Scenario support built in
