@@ -113,7 +113,7 @@ module.exports = function MongoosyScenario(mongoosy, input, options) {
 									debug(`Will drop indexes on db.${m}:`, rebuildIndexes[m].map(i => i.name).join(', '));
 
 									// Tell the mongo driver to drop the indexes we don't care about
-									// NOTE: Mongoose will about in-progress index creation when "dropIndexes" is passed an array
+									// NOTE: Mongoose will abort in-progress index creation when "dropIndexes" is passed an array
 									// @see https://jira.mongodb.org/browse/SERVER-37726
 									return mongoosy.models[m].collection.dropIndexes(rebuildIndexes[m].map(index => index.name));
 								})
