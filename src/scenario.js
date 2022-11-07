@@ -94,9 +94,9 @@ module.exports = function MongoosyScenario(mongoosy, input, options) {
 		.then(blob => { // Process each model we will operate on
 			var rebuildIndexes = {}; // Model => Indexes[] spec to rebuild later if in circular mode
 
-			return Promise.all(
+			return Promise.allSeries(
 				Object.keys(blob)
-					.map(m => Promise.resolve()
+					.map(m => () => Promise.resolve()
 						.then(()=> {
 							if (!settings.nuke) return;
 							debug('STAGE: Clearing collection', m);
