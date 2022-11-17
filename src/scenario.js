@@ -94,9 +94,9 @@ module.exports = function MongoosyScenario(mongoosy, input, options) {
 		.then(blob => { // Process each model we will operate on
 			var rebuildIndexes = {}; // Model => Indexes[] spec to rebuild later if in circular mode
 
-			return Promise.all(
+			return Promise.allSeries(
 				Object.keys(blob)
-					.map(m => Promise.resolve()
+					.map(m => () => Promise.resolve()
 						.then(()=> {
 							if (!settings.nuke) return;
 							debug('STAGE: Clearing collection', m);
@@ -113,9 +113,9 @@ module.exports = function MongoosyScenario(mongoosy, input, options) {
 									debug(`Will drop indexes on db.${m}:`, rebuildIndexes[m].map(i => i.name).join(', '));
 
 									// Tell the mongo driver to drop the indexes we don't care about
-									return Promise.all(rebuildIndexes[m].map(index =>
-										mongoosy.models[m].collection.dropIndex(index.name)
-									))
+									// NOTE: Mongoose will abort in-progress index creation when "dropIndexes" is passed an array
+									// @see https://jira.mongodb.org/browse/SERVER-37726
+									return mongoosy.models[m].collection.dropIndexes(rebuildIndexes[m].map(index => index.name));
 								})
 						})
 					)
