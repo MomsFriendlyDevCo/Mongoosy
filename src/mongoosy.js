@@ -96,11 +96,12 @@ class Mongoosy extends mongoose.Mongoose {
 	* This allows easy chaining for setup methods like `.method()`, `.virtual()` etc.
 	* @param {string} id The name of the model to create, this is automatically lowercased + pluralised
 	* @param {Object|mongoose.Schema} schema The schema to construct, if this is a plain JS object it is constructed into a schema instance first
+	* @param {Object} [options] Additional schema options
 	* @returns {MongooseSchema} The created Mongoose schema, also available via mongoosy.model[name]
 	*/
-	schema(id, schema) {
+	schema(id, schema, options) {
 		debug('Declare schema', id);
-		this.schemas[id] = new Schema(schema);
+		this.schemas[id] = new Schema(schema, options);
 		this.schemas[id].id = id;
 		this.schemas[id].mongoosy = this;
 		return this.schemas[id];
