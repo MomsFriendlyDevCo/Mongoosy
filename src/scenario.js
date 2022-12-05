@@ -243,7 +243,10 @@ module.exports = function MongoosyScenario(mongoosy, input, options) {
 			return Promise.all(Object.keys(rebuildIndexes)
 				.map(modelName =>Promise.resolve()
 					.then(()=> debug(`Re-create indexes on db.${modelName}:`, rebuildIndexes[modelName].map(i => i.name).join(', ')))
-					.then(()=> mongoosy.models[modelName].collection.createIndexes(rebuildIndexes[modelName]))
+					.then(()=> (_.isArray(rebuildIndexes[modelName]) && rebuildIndexes[modelName].length > 0)
+						? mongoosy.models[modelName].collection.createIndexes(rebuildIndexes[modelName])
+						: undefined
+					)
 				)
 			).then(()=> ({modelCounts}))
 		})
