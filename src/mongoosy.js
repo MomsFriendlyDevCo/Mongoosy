@@ -100,6 +100,15 @@ class Mongoosy extends mongoose.Mongoose {
 	* @returns {MongooseSchema} The created Mongoose schema, also available via mongoosy.model[name]
 	*/
 	schema(id, schema, options) {
+		if (_.has(this.schemas, id)) {
+			if (_.isUndefined(schema) && _.isUndefined(options)) throw new Error('Can not redeclare schema once initialised');
+
+			debug('Retrieving schema', id);
+			return this.schemas[id];
+		} else {
+			if (_.isUndefined(schema)) throw new Error('Missing schema definition');
+		}
+
 		debug('Declare schema', id);
 		this.schemas[id] = new Schema(schema, options);
 		this.schemas[id].id = id;
