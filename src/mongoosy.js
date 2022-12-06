@@ -101,7 +101,7 @@ class Mongoosy extends mongoose.Mongoose {
 	*/
 	schema(id, schema, options) {
 		if (_.has(this.schemas, id)) {
-			if (_.isUndefined(schema) && _.isUndefined(options)) throw new Error('Can not redeclare schema once initialised');
+			if (!_.isUndefined(schema) || !_.isUndefined(options)) throw new Error('Can not redeclare schema once initialised');
 
 			debug('Retrieving schema', id);
 			return this.schemas[id];
