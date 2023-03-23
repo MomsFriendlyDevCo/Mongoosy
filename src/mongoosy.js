@@ -145,6 +145,7 @@ class Mongoosy extends mongoose.Mongoose {
 	*/
 	utils = {
 		promiseAllLimit: require('./promise.alllimit'),
+		promiseAllSeries: require('./promise.allseries'),
 	};
 
 }

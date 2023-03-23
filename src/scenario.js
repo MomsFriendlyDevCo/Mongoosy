@@ -94,7 +94,7 @@ module.exports = function MongoosyScenario(mongoosy, input, options) {
 		.then(blob => { // Process each model we will operate on
 			var rebuildIndexes = {}; // Model => Indexes[] spec to rebuild later if in circular mode
 
-			return Promise.allSeries(
+			return mongoosy.utils.promiseAllSeries(
 				Object.keys(blob)
 					.map(m => () => Promise.resolve()
 						.then(()=> {
