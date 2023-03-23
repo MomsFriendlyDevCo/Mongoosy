@@ -35,10 +35,13 @@ var scanDoc = (doc, lookup = {}) => {
 * @param {Objet} mongoosy Mongoosy instance to use
 * @param {Object|string|array <string|object>} input Either a JS object(s) or a file glob (or array of globs) to process
 * @param {Object} [options] Additional options
+* @param {Object} [options.collections] Individual options per collection, each key is a Mongo collection
+* @param {Boolean} [options.collections.nuke=false] Allow complete removal of the collection rather than updating
+* @param {Array<String>|String} [options.collections.updateBy] Field or array of fields to recognise an existing document
 * @param {Object} [options.glob] Additional options to pass to globby
 * @param {boolean} [options.circular=false] Try to create stub documents in the first cycle, thus ensuring they always exists. This fixes recursive/graph-like data structures at the cost of speed
 * @param {boolean} [options.circularIndexDisable=true] Remove all indexes from the affected models before stubbing then re-implement them after - fixes `{required: true}` stub items
-* @param {boolean} [options.nuke=false] Whether to erase / rebuild existing collections before replacing them entirely
+* @param {boolean} [options.nuke=false] Whether to erase / rebuild existing collections before replacing them entirely, cannot be used if `collections` is specified
 * @param {number} [options.threads=3] How many documents to attempt to create at once
 * @param {function <Promise>} [options.postRead] Manipulate the merged scenario object before processing, called as (tree) where each key is the model and all keys are an array of items, expected to return the changed tree
 * @param {function} [options.postCreate] Function called whenever a document is created under a model, called as (model, count) where model is a string and count the number created for that model so far
@@ -47,6 +50,7 @@ var scanDoc = (doc, lookup = {}) => {
 */
 module.exports = function MongoosyScenario(mongoosy, input, options) {
 	var settings = {
+		collections: null,
 		glob: undefined,
 		circular: false,
 		circularIndexDisable: true,
@@ -57,6 +61,9 @@ module.exports = function MongoosyScenario(mongoosy, input, options) {
 		postStats: undefined,
 		...options,
 	};
+	// Argument checking {{{
+	if (settings.nuke && settings.collections) throw new Error('`nuke` cannot be used if `collections` is specified');
+	// }}}
 
 	return Promise.resolve()
 		.then(()=> Promise.all(_.castArray(input).map(item => {
@@ -98,9 +105,13 @@ module.exports = function MongoosyScenario(mongoosy, input, options) {
 				Object.keys(blob)
 					.map(m => () => Promise.resolve()
 						.then(()=> {
-							if (!settings.nuke) return;
-							debug('STAGE: Clearing collection', m);
-							return mongoosy.models[m].deleteMany({})
+							if (
+								settings.colleections?.[m]?.nuke === true
+								|| settings.nuke === true
+							) {
+								debug('STAGE: Clearing collection', m);
+								return mongoosy.models[m].deleteMany({})
+							}
 						})
 						.then(()=> {
 							if (!settings.circular || !settings.circularIndexDisable) return; // Skip index manipulation if disabled
