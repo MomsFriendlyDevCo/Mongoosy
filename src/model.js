@@ -142,7 +142,7 @@ module.exports = function(mongoosy) {
 		* @param {Object|array|string} options A full options body if an object. If non-objects are given they are used to populate `options.by`
 		* @param {array|string} options.by The field(s) to use when determining if a document already exists, these fields should all have an index to reduce overhead
 		* @param {boolean} [options.result=true] Return the created / updated document. Disable this if you just want to save and ignore the new doc
-		* @returns {Object} The created or updated document contents
+		* @returns {Promise<Object>} The created or updated document contents
 		*
 		* @example Upsert a user by email address
 		* mongoosy.models.users.upsert({name: 'Joe Random', email: 'joe@random.com'}, 'email') //= Newly created or updated document
