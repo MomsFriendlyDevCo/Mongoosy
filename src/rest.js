@@ -80,6 +80,8 @@ module.exports = function MongoosyRest(mongoosy, options) {
 	mongoosy.Rest = function MongoosyRest(model, options) {
 		var settings = {...pluginSettings, ...options};
 
+		// TODO: Possible to set toJSON/toObject virtuals globally? Get "not found" when doing so
+
 		if (_.isString(model)) {
 			if (!mongoosy.models[model]) throw new Error(`Cannot create ReST middleware for non-existant model "${model}". Try declaring its schema first`);
 			model = mongoosy.models[model];
@@ -216,8 +218,8 @@ module.exports = function MongoosyRest(mongoosy, options) {
 						: serverMethod == 'query' && settings.queryMap && settings.queryMap === 'getMap' ? settings.getMap
 						: serverMethod == 'query' && settings.queryMap ? settings.queryMap
 						: doc => { // Default behaviour - hide all `_` prefixed fields if settings.selectHidden is enabled
-							if (settings.selectHidden) return doc.toObject(); // No rewrite needed
-							return _.pickBy(doc.toObject(), (v, k) => settings.neverHidden.includes(k) || !k.startsWith('_'));
+							if (settings.selectHidden) return doc.toObject({ virtuals: true }); // No rewrite needed
+							return _.pickBy(doc.toObject({ virtuals: true }), (v, k) => settings.neverHidden.includes(k) || !k.startsWith('_'));
 						};
 
 					switch (serverMethod) {
