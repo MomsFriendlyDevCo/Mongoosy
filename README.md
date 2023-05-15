@@ -344,6 +344,8 @@ When migrating from Monoxide to Mongoose there are a few minor things to remembe
 * Queries returning no documents no longer automatically fail if `$errNoDocs` is set, use `query.orFail()` instead
 * `model.use()` -> `model.plugin()`
 * `model.findOneByID()` -> `model.findById()`
+* `model.$mongooseModel.` -> `model.`
+* `model.$mongoModel.` -> `model.`
 * When setting `{ type: Object, default: {} }` pass `{ minimize: false }` option to `Schema` in order to ensure the key is created.
 * Iterators now use the default [Mongoose cursor system](https://mongoosejs.com/docs/api/query.html#query_Query-cursor). Use the `Thing.find().cursor().map()` pattern instead of filter / map / forEach
 * Virtuals do not pass the document as the first parameter. Use `this` within the getter / setter function to recieve the current document
