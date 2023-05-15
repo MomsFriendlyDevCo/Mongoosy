@@ -260,7 +260,7 @@ module.exports = function MongoosyRest(mongoosy, options) {
 							.then(doc => { // Mutate existing document while dirtying top-level keys.
 								delete req.body.__v;
 								for (var k in req.body) {
-									doc[k] = req.body[k];
+									_.set(doc, k, req.body[k]);
 								}
 								return doc.save();
 							})
