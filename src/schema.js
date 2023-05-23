@@ -41,8 +41,8 @@ module.exports = class MongoosySchema extends mongoose.Schema {
 		} else if (_.isString(field) && (_.isFunction(getter) || _.isFunction(setter))) {
 			if (_.isFunction(getter)) super.virtual(field).get(getter);
 			if (_.isFunction(setter)) super.virtual(field).set(setter);
-		} else {
-			super.virtual(field, getter);
+		} else if (_.isString(field) && _.isFunction(getter)) {
+			super.virtual(field).get(getter);
 		}
 		return this;
 	};

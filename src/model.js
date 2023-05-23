@@ -23,7 +23,7 @@ module.exports = function(mongoosy) {
 		* @param {boolean} [options.indexes=true] Append indexing information
 		* @param {boolean} [options.prototype=false] Add a `$prototype` key which contains an empty object with all defaults applied
 		*
-		* @returns {Object<String: Object>} An object with each dotted notation path as the key and basic information about each path
+		* @returns {Promise<Object<String: Object>>} An object with each dotted notation path as the key and basic information about each path
 		* @property {string} type The type of data. Corresponds to 'string', 'number', 'date', 'boolean', 'array', 'object', 'objectid'
 		* @property {Array} [enum] If the type of data has an enum this corresponds to the enum options, if `collectionEnums` is specified this is of the form `{id: String, title: String}`
 		* @property {*} [default] The default value for the field, this can also be the special case `'[DYNAMIC]'` if it is computed via a function (e.g. Arrays-of-Scalars)
@@ -89,6 +89,7 @@ module.exports = function(mongoosy) {
 							if (_.has(path, 'schema.paths')) scanNode(path.schema.paths, id + '.');
 							if (!_.isUndefined(path.defaultValue)) info.default = [];
 							break;
+						case 'mixed':
 						case 'object':
 							info.type = 'object';
 							break;
@@ -96,8 +97,9 @@ module.exports = function(mongoosy) {
 							info.type = 'objectid';
 							if (_.has(path, 'options.ref')) info.ref = path.options.ref;
 							break;
+
 						default:
-							debug('Unknown Mongo data type during meta extract on ' + this.collection + ':', path.instance.toLowerCase());
+							debug('Unknown Mongo data type during meta extract on ' + model.collection.collectionName + ':', path.instance.toLowerCase());
 					}
 
 					// Extract default value if its not a function (otherwise return [DYNAMIC])
@@ -130,7 +132,7 @@ module.exports = function(mongoosy) {
 			}
 			// }}}
 
-			return meta;
+			return Promise.resolve(meta);
 		};
 
 
@@ -140,7 +142,7 @@ module.exports = function(mongoosy) {
 		* @param {Object|array|string} options A full options body if an object. If non-objects are given they are used to populate `options.by`
 		* @param {array|string} options.by The field(s) to use when determining if a document already exists, these fields should all have an index to reduce overhead
 		* @param {boolean} [options.result=true] Return the created / updated document. Disable this if you just want to save and ignore the new doc
-		* @returns {Object} The created or updated document contents
+		* @returns {Promise<Object>} The created or updated document contents
 		*
 		* @example Upsert a user by email address
 		* mongoosy.models.users.upsert({name: 'Joe Random', email: 'joe@random.com'}, 'email') //= Newly created or updated document
