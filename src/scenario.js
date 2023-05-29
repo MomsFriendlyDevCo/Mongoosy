@@ -41,6 +41,7 @@ var scanDoc = (doc, lookup = {}) => {
 * @param {Object} [options.glob] Additional options to pass to globby
 * @param {boolean} [options.circular=false] Try to create stub documents in the first cycle, thus ensuring they always exists. This fixes recursive/graph-like data structures at the cost of speed
 * @param {boolean} [options.circularIndexDisable=true] Remove all indexes from the affected models before stubbing then re-implement them after - fixes `{required: true}` stub items
+* @param {function} [options.importer] Function to dynamically read in a file and return the evaluated object contents, defaults to a `require` pattern
 * @param {boolean} [options.nuke=false] Whether to erase / rebuild existing collections before replacing them entirely, cannot be used if `collections` is specified
 * @param {number} [options.threads=3] How many documents to attempt to create at once
 * @param {function <Promise>} [options.postRead] Manipulate the merged scenario object before processing, called as (tree) where each key is the model and all keys are an array of items, expected to return the changed tree
@@ -54,6 +55,9 @@ module.exports = function MongoosyScenario(mongoosy, input, options) {
 		glob: undefined,
 		circular: false,
 		circularIndexDisable: true,
+		importer: path => {
+			return require(path);
+		},
 		nuke: false,
 		threads: 3,
 		postRead: undefined,
@@ -69,12 +73,14 @@ module.exports = function MongoosyScenario(mongoosy, input, options) {
 		.then(()=> Promise.all(_.castArray(input).map(item => {
 			if (_.isString(item)) {
 				return glob(item, options?.glob)
-					.then(files => files.map(file => {
-						var res = require(file);
-						if (!res || !_.isObject(res)) throw new Error(`Error importing scenario contents from ${file}, expected object got ${typeof res}`);
-						debug('Scenario import', file, '=', _.keys(res).length, 'keys');
-						return res;
-					}))
+					.then(files => Promise.all(files.map(file => Promise.resolve()
+						.then(()=> settings.importer(file))
+						.then(res => {
+							if (!res || !_.isObject(res)) throw new Error(`Error importing scenario contents from ${file}, expected object got ${typeof res}`);
+							debug('Scenario import', file, '=', _.keys(res).length, 'keys');
+							return res;
+						})
+					)))
 			} else if (_.isObject(item)) {
 				return item;
 			}
@@ -100,6 +106,7 @@ module.exports = function MongoosyScenario(mongoosy, input, options) {
 		})
 		.then(blob => { // Process each model we will operate on
 			var rebuildIndexes = {}; // Model => Indexes[] spec to rebuild later if in circular mode
+			debug('Build data for', Object.keys(blob).length, 'collections');
 
 			return mongoosy.utils.promiseAllSeries(
 				Object.keys(blob)
