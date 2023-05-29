@@ -251,6 +251,7 @@ module.exports = function MongoosyRest(mongoosy, options) {
 
 						case 'search': return model.search(req.query[settings.searchParam], {
 								filter: removeMetaParams(_.omit(req.query, settings.searchParam)),
+								..._.pick(req.query, ['limit', 'select', 'skip', 'sort']),
 							})
 							.then(docs => Promise.all(docs.map(doc => docMap(doc, req))))
 							.catch(e => settings.errorHandler(res, 400, e))
