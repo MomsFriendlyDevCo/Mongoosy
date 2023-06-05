@@ -27,7 +27,8 @@
     "debug": "^4.3.4",
     "globby": "^11.0.2",
     "lodash": "^4.17.21",
-    "mongoose": "^6.0.8"
+    "mongoose": "^6.0.8",
+    "string-split-by": "^1.0.0"
   },
   "devDependencies": {
     "axios": "^0.21.1",

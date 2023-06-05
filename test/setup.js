@@ -67,7 +67,10 @@ before('setup schemas', ()=> {
 before('compile models', ()=> mongoosy.compileModels());
 
 // Import scenario data {{{
-before('setup scenario data', ()=> mongoosy.scenario(require('./data/scenario')));
+before('setup scenario data', function() {
+	this.timeout(60 * 1000); //~ 1m
+	return mongoosy.scenario(require('./data/scenario'));
+});
 // }}}
 
 after('drop database', ()=> mongoosy.dropDatabase({$confirmDrop: true}));

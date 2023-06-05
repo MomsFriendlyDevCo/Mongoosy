@@ -8,6 +8,9 @@ var Schema = require('./schema');
 require('./schematype.objectid');
 require('./schematype.pointer');
 
+/**
+* Main Mongoosy instance
+*/
 class Mongoosy extends mongoose.Mongoose {
 
 	constructor() {
