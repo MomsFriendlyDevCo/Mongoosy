@@ -24,6 +24,8 @@ module.exports = function MongoosyRest(mongoosy, options) {
 		save: false,
 		delete: false,
 		meta: false,
+		search: true, // Only works if model.search() is present
+		searchCount: true, // ^^^
 		searchId: '_id',
 		errorHandler: (res, code, text) => res.status(code).send(text),
 		selectHidden: false,
@@ -55,6 +57,8 @@ module.exports = function MongoosyRest(mongoosy, options) {
 	* @param {boolean|array <function>|function} [options.save=false] Enable updating of records or specify middleware(s) to execute beforehand
 	* @param {boolean|array <function>|function} [options.delete=false] Enable deleting of records or specify middleware(s) to execute beforehand
 	* @param {boolean|array <function>|function} [options.meta=false] Enable retrieving the structure of the collection (as above)
+	* @param {boolean|array <function>|function} [options.search=true] Enable query + fuzzy searching against the model
+	* @param {boolean|array <function>|function} [options.searchCount=true] Enable query + fuzzy searching against the model (as a count)
 	* @param {array<string>} [options.metaCustomFields] Additional fields to expose in meta
 	* @param {string} [options.metaParam="meta"] Special case URL suffix to identify that we are performating a meta operation and not looking up an ID
 	* @param {boolean|array <function>|function} [options.search=false] Enable searching of records or specify middleware(s) to execute beforehand
@@ -113,7 +117,9 @@ module.exports = function MongoosyRest(mongoosy, options) {
 			Promise.resolve()
 				// Determine serverMethod {{{
 				.then(()=> { // Work out method to use (GET /api/:id -> 'get', POST /api/:id -> 'save' etc.)
-					if (req.method == 'GET' && settings.countParam && req.params[settings.param] && req.params[settings.param] == settings.countParam) { // Count matches
+					if (model.search != undefined && req.method == 'GET' && settings.countParam && req.params[settings.param] && req.params[settings.param] == settings.countParam && req.query[settings.searchParam] != undefined) { // Search + Count
+						serverMethod = 'searchCount';
+					} else if (req.method == 'GET' && settings.countParam && req.params[settings.param] && req.params[settings.param] == settings.countParam) { // Count matches
 						serverMethod = 'count';
 					} else if (req.method == 'GET' && settings.metaParam && req.params[settings.param] && req.params[settings.param] == settings.metaParam) { // Return meta information
 						serverMethod = 'meta';
@@ -155,7 +161,7 @@ module.exports = function MongoosyRest(mongoosy, options) {
 				// }}}
 				// Query validation {{{
 				.then(()=> {
-					if (settings.forbidHidden && ['get', 'query'].includes(serverMethod) && req.query.select && req.query.select.split(/[\s\,]+/).some(f => !settings.neverHidden.includes(f) && f.startsWith('_'))) return Promise.reject('You are not allowed to select hidden database fields');
+					if (settings.forbidHidden && ['get', 'query', 'search'].includes(serverMethod) && req.query.select && req.query.select.split(/[\s\,]+/).some(f => !settings.neverHidden.includes(f) && f.startsWith('_'))) return Promise.reject('You are not allowed to select hidden database fields');
 
 					if (!settings.queryValidate || ['get', 'save', 'create', 'delete'].includes(serverMethod)) return;
 
@@ -256,6 +262,12 @@ module.exports = function MongoosyRest(mongoosy, options) {
 							.then(docs => Promise.all(docs.map(doc => docMap(doc, req))))
 							.catch(e => settings.errorHandler(res, 400, e))
 
+						case 'searchCount': return model.search(req.query[settings.searchParam], {
+								count: true,
+								filter: removeMetaParams(_.omit(req.query, settings.searchParam)),
+							})
+							.then(count => ({count}))
+							.catch(e => settings.errorHandler(res, 400, e))
 
 						case 'save': return model.findById(req.params[settings.param])
 							.then(doc => { // Mutate existing document while dirtying top-level keys.
