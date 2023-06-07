@@ -73,6 +73,30 @@ before('setup scenario data', function() {
 });
 // }}}
 
+// Setup movies {{{
+before('create movies collection', function() {
+	this.timeout(30 * 1000);
+
+	return Promise.resolve()
+		.then(()=> mongoosy.dropCollection('movies'))
+		.then(()=> mongoosy.schema('movies', {
+			title: {type: 'string', required: true},
+			year: {type: 'number', required: true},
+			info: {
+				directors: ['string'],
+				release_date: 'date',
+				genres: ['string'],
+				image_url: 'string',
+				plot: 'string',
+				rank: 'number',
+				running_time_secs: 'number',
+				actors: ['string'],
+			},
+		}).compile())
+		.then(()=> mongoosy.scenario(`${__dirname}/data/movies.json`))
+});
+// }}}
+
 after('drop database', ()=> mongoosy.dropDatabase({$confirmDrop: true}));
 
 after('disconnect', ()=> mongoosy.disconnect());

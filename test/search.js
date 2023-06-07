@@ -8,24 +8,7 @@ require('./setup');
 describe('mongoosy.Search', function() {
 	this.timeout(5 * 1000);
 
-	before('drop existing moviesSearchable collection', ()=> mongoosy.dropCollection('moviesSearchable'));
-
-	before('create a moviesSearchable schema', ()=> mongoosy.schema('moviesSearchable', {
-		title: {type: 'string', required: true},
-		year: {type: 'number', required: true},
-		info: {
-			directors: ['string'],
-			release_date: 'date',
-			genres: ['string'],
-			image_url: 'string',
-			plot: 'string',
-			rank: 'number',
-			running_time_secs: 'number',
-			actors: ['string'],
-		},
-	}));
-
-	before('create search index', ()=> mongoosy.schemas.moviesSearchable.use(searchMiddleware, {
+	before('create search index', ()=> mongoosy.schemas.movies.use(searchMiddleware, {
 		fields: [
 			{path: 'title', weight: 100},
 			{path: 'info.directors', weight: 50},
@@ -33,20 +16,22 @@ describe('mongoosy.Search', function() {
 		],
 	}));
 
-	before('compile schema', ()=> mongoosy.schemas.moviesSearchable.compile());
+	before('compile schema', ()=> mongoosy.schemas.movies.compile());
+
+	before('wait for reindexing', ()=> mongoosy.models.movies.$indexBuilding);
 
 	before('load movie data', function() {
 		this.timeout(30 * 1000);
 		let movies = JSON.parse(fs.readFileSync(`${__dirname}/data/movies.json`));
 
 		// Rename movies key
-		movies.moviesSearchable = movies.movies;
+		movies.movies = movies.movies;
 		delete movies.movies;
 
 		return mongoosy.scenario(movies);
 	});
 
-	before('check data has loaded', ()=> mongoosy.models.moviesSearchable.countDocuments()
+	before('check data has loaded', ()=> mongoosy.models.movies.countDocuments()
 		.then(res => {
 			expect(res).to.be.a('number');
 			expect(res).to.be.above(100);
@@ -54,7 +39,7 @@ describe('mongoosy.Search', function() {
 	);
 
 	it('simple director string search', ()=>
-		mongoosy.models.moviesSearchable.search('luhrmann')
+		mongoosy.models.movies.search('luhrmann')
 			.then(res => {
 				expect(res).to.be.an('array');
 				expect(res).to.have.length(5);
@@ -67,7 +52,7 @@ describe('mongoosy.Search', function() {
 	);
 
 	it('simple search result counting', ()=>
-		mongoosy.models.moviesSearchable.search('luhrmann', {count: true})
+		mongoosy.models.movies.search('luhrmann', {count: true})
 			.then(res => {
 				expect(res).to.be.a('number');
 				expect(res).to.equal(5);
@@ -75,7 +60,7 @@ describe('mongoosy.Search', function() {
 	);
 
 	it('compound query', ()=>
-		mongoosy.models.moviesSearchable.search('luhrmann')
+		mongoosy.models.movies.search('luhrmann')
 			.find({year: 2013})
 			.then(res => {
 				expect(res).to.be.an('array');

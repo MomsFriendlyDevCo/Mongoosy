@@ -15,28 +15,6 @@ var url = 'http://localhost:' + port;
 describe('mongoosy.Rest', function() {
 	this.timeout(5 * 1000);
 
-	before('drop existing movies collection', ()=> mongoosy.dropCollection('movies'));
-
-	before('create a movies schema', ()=> mongoosy.schema('movies', {
-		title: {type: 'string', required: true},
-		year: {type: 'number', required: true},
-		info: {
-			directors: ['string'],
-			release_date: 'date',
-			genres: ['string'],
-			image_url: 'string',
-			plot: 'string',
-			rank: 'number',
-			running_time_secs: 'number',
-			actors: ['string'],
-		},
-	}).compile());
-
-	before('load movie data', function() {
-		this.timeout(30 * 1000);
-		return mongoosy.scenario(`${__dirname}/data/movies.json`);
-	});
-
 	var server;
 	before('setup a server', function(finish) {
 		var app = express();

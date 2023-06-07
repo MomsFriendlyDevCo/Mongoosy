@@ -69,7 +69,10 @@ module.exports = function MongoosySearch(model, options) {
 		},
 	);
 
-	model.createIndexes()
+	// Sync indexes from schema to models
+	// Model.$indexBuilding is a waitable promise
+	model.$indexBuilding = model.createIndexes()
+		.then(()=> console.log('Promise post-index'))
 	// }}}
 
 	// Add MODEL.search(text, opts) function {{{
