@@ -99,15 +99,17 @@ module.exports = function MongoosyRest(mongoosy, options) {
 
 		var removeMetaParams = query => _.omit(query, ['limit', 'select', 'skip', 'sort']);
 		var attemptParse = query => {
-			try {
-				let res = {};
-				for (k in query) {
+			let res = {};
+			for (k in query) {
+				try {
+					//debug('attemptParse.key', k);
 					res[k] = JSON.parse(query[k]);
+				} catch(e) {
+					//debug('attemptParse.catch', e);
+					res[k] = query[k];
 				}
-				return res;
-			} catch(e) {
-				return query;
 			}
+			return res;
 		};
 
 		debug('Setup ReST middleware for model', model.modelName);
