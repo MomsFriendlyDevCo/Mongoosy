@@ -95,6 +95,13 @@ before('create movies collection', function() {
 		}).compile())
 		.then(()=> mongoosy.scenario(`${__dirname}/data/movies.json`))
 });
+
+before('check movie data has loaded', ()=> mongoosy.models.movies.countDocuments()
+	.then(res => {
+		expect(res).to.be.a('number');
+		expect(res).to.be.above(100);
+	})
+);
 // }}}
 
 after('drop database', ()=> mongoosy.dropDatabase({$confirmDrop: true}));
