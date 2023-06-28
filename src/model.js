@@ -4,6 +4,7 @@ var debug = Debug('mongoosy');
 
 /**
 * Decorate the existing MongooseModel with more methods
+* @emits query Emitted as `(query)` whenever any query is executed against this model
 */
 module.exports = function(mongoosy) {
 	mongoosy.on('model', model => {
@@ -186,6 +187,42 @@ module.exports = function(mongoosy) {
 		model.count = function(query) {
 			return model.countDocuments(query);
 		};
+
+
+		/**
+		* Add a method which can be used as a model.static() or as a query method
+		* @param {String} name The name of the query method to append
+		* @param {Function} handler The function to call as `(query)` when executed
+		* @returns {MongooseModel} This chainable model
+		*/
+		model.addQueryMethod = function addQueryMethod(name, handler) {
+			// Add as method static
+			model[name] = (...args) => {
+				var query = model.find(); // Create a new query object
+				handler.call(query, ...args);
+				return query;
+			};
+
+			// Add into query listener
+			model.on('query', function(query) {
+				handler.call(query, query);
+			});
+		};
+
+
+		// Wrap various functions in a emit handler {{{
+		[
+			{method: 'find', emit: 'query'},
+			{method: 'count', emit: 'count'},
+		]
+			.forEach(i => {
+				var originalMethod = model[i.method];
+				model[i.method] = function(...args) {
+					mongoosy.emit(i.emit, this, ...args);
+					return originalMethod.call(this, ...args);
+				};
+			});
+		// }}}
 
 
 		// Debugging enabled? Strap a debugging prefix onto all doc access methods

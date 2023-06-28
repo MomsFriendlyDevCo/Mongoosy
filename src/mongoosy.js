@@ -81,7 +81,7 @@ class Mongoosy extends mongoose.Mongoose {
 			.filter(id => !ids || _.castArray(ids).includes(id))
 			.map(id => Promise.resolve()
 				.then(()=> this.emit('schema', this.schemas[id]))
-				.then(()=> this.models[id] = super.model(id, this.schemas[id]))
+				.then(()=> this.models[id] = eventer.extend(super.model(id, this.schemas[id])))
 				.then(()=> this.emit('model', this.models[id]))
 				.then(()=> this.utils.promiseAllLimit(1, this.schemas[id].middleware.map(middleware => ()=>
 					middleware.handler.call(this.models[id], this.models[id], middleware.options)

@@ -2,9 +2,9 @@ var _ = require('lodash');
 var mongoosy = require('../src/mongoosy');
 const stringSplit = require('string-split-by');
 
-module.exports = function MongoosySearch(model, options) {
+module.exports = function MongoosyTextIndex(model, options) {
 	var settings = {
-		path: '_search',
+		path: '_textIndex',
 		fields: [
 			// Use static path
 			// {path: 'lastName', weight: 10},
@@ -25,7 +25,7 @@ module.exports = function MongoosySearch(model, options) {
 			.join(' ')
 			.trim()
 			.value(),
-		searchTermsModify: v => _.chain(v)
+		termsModify: v => _.chain(v)
 			.toString()
 			.thru(v => v.toUpperCase())
 			.deburr()
@@ -52,7 +52,7 @@ module.exports = function MongoosySearch(model, options) {
 			settings.fields
 				.filter(f => {
 					if (f.path) return true;
-					console.warn('Ignoring unsupported search field type', f);
+					console.warn('Ignoring unsupported text-index field type', f);
 				})
 				.map(f => [f.path, 'text'])
 		),
@@ -62,7 +62,7 @@ module.exports = function MongoosySearch(model, options) {
 				settings.fields
 					.filter(f => {
 						if (f.path) return true;
-						console.warn('Ignoring unsupported search field type', f);
+						console.warn('Ignoring unsupported text-index field type', f);
 					})
 					.map(f => [f.path, f.weight])
 			),
@@ -72,15 +72,14 @@ module.exports = function MongoosySearch(model, options) {
 	// Sync indexes from schema to models
 	// Model.$indexBuilding is a waitable promise
 	model.$indexBuilding = model.createIndexes()
-		.then(()=> console.log('Promise post-index'))
 	// }}}
 
-	// Add MODEL.search(text, opts) function {{{
+	// Add MODEL.textSearch(text, opts) + QUERY.textSearch(text, opts) {{{
 	/**
-	* Fuzzy search using the declared search fields
+	* Fuzzy text index search using the declared search fields
 	* @param {String} terms Search terms to filter
 	* @param {Object} [options] Additional options
-	* @param {String} [options.scoreField="_score"] Append the search score as this field, set to falsy to disable
+	* @param {String} [options.scoreField="_score"] Append the search score as this field, set to falsy to disable.
 	* @param {Boolean} [options.sortByScore=true] Sort results by the score, descending
 	* @param {Boolean} [options.count=false] Return only the count of matching documents, optimizing various parts of the search functionality
 	* @param {Boolean} [options.acceptTags=true] Whether to process specified tags. If falsy tag contents are ignored and removed from the term
@@ -88,7 +87,8 @@ module.exports = function MongoosySearch(model, options) {
 	* @param {RegExp} [options.tagsRe] RegExp used to split tags
 	* @returns {array<Object>} An array of matching documents with the meta `scoreField`
 	*/
-	model.search = function mongooseSearch(terms, options) {
+	model.addQueryMethod('textSearch', function mongooseTextSearch(terms, options) {
+		var query = this;
 		var searchStart = Date.now();
 		var searchSettings = {
 			filter: undefined,
@@ -100,14 +100,16 @@ module.exports = function MongoosySearch(model, options) {
 			wholeTerm: false,
 			scoreField: '_score',
 			sortByScore: true,
-			log: console.log.bind(this, 'Search'),
+			log: console.log.bind(this, 'TextSearch'),
 			..._.cloneDeep(settings),
 			...options,
 		};
+
 		// Ensure parameters are integers
 		['skip', 'limit'].forEach(k => searchSettings[k] = parseInt(searchSettings[k]));
 
 		var termsRE = _.chain(terms)
+			.tap(v => console.log('Perform text search', {terms}))
 			.thru(terms => stringSplit(terms, /\s+/, {
 				ignore: ['"', "'", '()'], // Preserve compound terms with speachmarks + brackets
 				escape: true, // Allow escaping of terms
@@ -134,12 +136,12 @@ module.exports = function MongoosySearch(model, options) {
 				? [_.trim(terms.join(' '))]
 				: terms
 			)
-			.map(term => searchSettings.searchTermsModify(term)) // Mangle terms to remove burring etc.
+			.map(term => searchSettings.termsModify(term)) // Mangle terms to remove burring etc.
 			.map(term => new RegExp(term.replace(/[|\\{}()[\]^$+*?.]/g, '\\$&'), 'i')) // Encode each term as a RegExp
 			.value();
 
 		searchSettings.log(
-			`Performing ${!searchSettings.count ? 'search' : 'search-count'} on`,
+			`Performing ${!searchSettings.count ? 'textSearch' : 'textSearch+count'} on`,
 			'collection=', model.collectionName,
 			'raw query=', `"${terms}"`,
 			'RE query=', termsRE.map(t => t.toString()).join(', '),
@@ -150,7 +152,7 @@ module.exports = function MongoosySearch(model, options) {
 		);
 
 		if (searchSettings.count) {
-			return model.countDocuments({
+			return query.countDocuments({
 				$text: {
 					$search: terms,
 					$caseSensitive: false,
@@ -158,26 +160,24 @@ module.exports = function MongoosySearch(model, options) {
 				},
 			});
 		} else {
-			let query = model.find({
-				$text: {
-					$search: terms,
-					$caseSensitive: false,
-					$diacriticSensitive: false,
-				},
-			},
-			{
-				...(searchSettings.scoreField && {
+			query.setQuery({$text: {
+				$search: terms,
+				$caseSensitive: false,
+				$diacriticSensitive: false,
+			}});
+
+			if (searchSettings.scoreField)
+				query.projection({
 					[searchSettings.scoreField]: {
 						$meta: 'textScore'
 					},
-				}),
-			})
+				})
 
 			if (settings.sortByScore)
-				query.sort({[searchSettings.scoreField]: -1});
+				query.sort({score: {$meta: 'textScore'}});
 
 			return query;
 		}
-	};
+	});
 	// }}}
 }

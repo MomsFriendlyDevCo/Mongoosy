@@ -1,11 +1,11 @@
 var expect = require('chai').expect;
 var fs = require('fs');
 var mongoosy = require('..');
-var searchMiddleware = require('../middleware/search');
+var searchMiddleware = require('../middleware/textIndex');
 
 require('./setup');
 
-describe('mongoosy.Search', function() {
+describe('Middleware: TextSearch', function() {
 	this.timeout(5 * 1000);
 
 	before('create search index', ()=> mongoosy.schemas.movies.use(searchMiddleware, {
@@ -20,26 +20,8 @@ describe('mongoosy.Search', function() {
 
 	before('wait for reindexing', ()=> mongoosy.models.movies.$indexBuilding);
 
-	before('load movie data', function() {
-		this.timeout(30 * 1000);
-		let movies = JSON.parse(fs.readFileSync(`${__dirname}/data/movies.json`));
-
-		// Rename movies key
-		movies.movies = movies.movies;
-		delete movies.movies;
-
-		return mongoosy.scenario(movies);
-	});
-
-	before('check data has loaded', ()=> mongoosy.models.movies.countDocuments()
-		.then(res => {
-			expect(res).to.be.a('number');
-			expect(res).to.be.above(100);
-		})
-	);
-
 	it('simple director string search', ()=>
-		mongoosy.models.movies.search('luhrmann')
+		mongoosy.models.movies.textSearch('luhrmann')
 			.then(res => {
 				expect(res).to.be.an('array');
 				expect(res).to.have.length(5);
@@ -52,7 +34,7 @@ describe('mongoosy.Search', function() {
 	);
 
 	it('simple search result counting', ()=>
-		mongoosy.models.movies.search('luhrmann', {count: true})
+		mongoosy.models.movies.textSearch('luhrmann', {count: true})
 			.then(res => {
 				expect(res).to.be.a('number');
 				expect(res).to.equal(5);
@@ -60,7 +42,7 @@ describe('mongoosy.Search', function() {
 	);
 
 	it('compound query', ()=>
-		mongoosy.models.movies.search('luhrmann')
+		mongoosy.models.movies.textSearch('luhrmann')
 			.find({year: 2013})
 			.then(res => {
 				expect(res).to.be.an('array');

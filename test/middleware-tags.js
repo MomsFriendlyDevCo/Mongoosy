@@ -49,7 +49,7 @@ describe('Middleware: Tags', function() {
 
 	before('compile schema', ()=> mongoosy.schemas.movies.compile());
 
-	it.only('should parse tags', ()=>
+	it('should parse tags', ()=>
 		mongoosy.models.movies.parseTags('foo after:2000-01-01 bar before:"2015-12-31" stars:3-5 baz')
 			.then(res => {
 				expect(res).to.be.an('object');
