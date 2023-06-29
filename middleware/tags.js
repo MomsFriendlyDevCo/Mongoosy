@@ -22,7 +22,7 @@ module.exports = function MongoosyTags(model, options) {
 	if (settings.tags?.length <= 0) throw new Error('Must specify at least one tag');
 	// }}}
 
-	// Add MODEL.parseTags(terms, opts) {{{
+	// MODEL.parseTags(terms, opts) {{{
 	/**
 	* Parse the incomming field / value into an objecct / aggregation query block
 	* e.g. {'req.query.q': 'is:active after:2000 before:2025 "some fuzzy search"'}

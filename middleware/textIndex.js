@@ -2,6 +2,20 @@ var _ = require('lodash');
 var mongoosy = require('../src/mongoosy');
 const stringSplit = require('string-split-by');
 
+/**
+* Add [MODEL|QUERY].textIndex() via middleware to create + search text index fields
+* @param {Object} [options] Additional options to mutate behaviour
+* @param {String} [options.path="_textIndex"] The path within the MongooseDocument to save the computed data
+* @param {Function} [options.cleanTerms] Function to clean up tokens prior to indexing, defaults to applying uppercase + debug + replacing awkward characters (but preserving email addresses). Called as `(terms:Array<String>)`
+* @param {Boolean} [options.acceptTags=true] Use the tag parsing middleware prior to searching if it is available
+* @param {merge
+*
+* @param {Array<Object>} [options.fields] Collection of fields to index
+* @param {String} [options.fields.path] Static path to index (conflicts with 'name')
+* @param {String} [options.fields.name] Dynamic item to index (conflicts with 'path')
+* @param {Number} [options.fields.weight] Search weighting to apply, higher weight is higher priority
+* @param {Function} [options.fields.handler] Function to calculate the term value if `name` is also specified. Called as `(doc)`
+*/
 module.exports = function MongoosyTextIndex(model, options) {
 	var settings = {
 		path: '_textIndex',
@@ -12,7 +26,7 @@ module.exports = function MongoosyTextIndex(model, options) {
 			// Use (sync/async) handler function, can be a promise return
 			// {name: 'ref', weight: 20, handler() {...}}
 		],
-		mutateTokens: v => _.chain(v)
+		cleanTerms: v => _.chain(v)
 			.toString()
 			.thru(v => v.toUpperCase())
 			.deburr()
@@ -25,15 +39,7 @@ module.exports = function MongoosyTextIndex(model, options) {
 			.join(' ')
 			.trim()
 			.value(),
-		termsModify: v => _.chain(v)
-			.toString()
-			.thru(v => v.toUpperCase())
-			.deburr()
-			.value(),
-		select: undefined,
 		acceptTags: true,
-		mergeTags: {},
-		tagsRe: /^(?<tag>.+?):(?<val>.+)$/,
 		...options,
 	};
 	// Sanity checks {{{
@@ -74,7 +80,7 @@ module.exports = function MongoosyTextIndex(model, options) {
 	model.$indexBuilding = model.createIndexes()
 	// }}}
 
-	// Add MODEL.textSearch(text, opts) + QUERY.textSearch(text, opts) {{{
+	// MODEL.textSearch(text, opts) + QUERY.textSearch(text, opts) {{{
 	/**
 	* Fuzzy text index search using the declared search fields
 	* @param {String} terms Search terms to filter
@@ -83,7 +89,6 @@ module.exports = function MongoosyTextIndex(model, options) {
 	* @param {Boolean} [options.sortByScore=true] Sort results by the score, descending
 	* @param {Boolean} [options.count=false] Return only the count of matching documents, optimizing various parts of the search functionality
 	* @param {Boolean} [options.acceptTags=true] Whether to process specified tags. If falsy tag contents are ignored and removed from the term
-	* @param {Object} [options.mergeTags={}] Tags to merge into the terms tags, if `acceptTags=false` this is used instead of any user provided tags
 	* @param {RegExp} [options.tagsRe] RegExp used to split tags
 	* @returns {array<Object>} An array of matching documents with the meta `scoreField`
 	*/
@@ -95,7 +100,6 @@ module.exports = function MongoosyTextIndex(model, options) {
 			populate: undefined,
 			limit: 50,
 			skip: 0,
-			select: undefined,
 			count: false,
 			wholeTerm: false,
 			scoreField: '_score',
@@ -136,7 +140,7 @@ module.exports = function MongoosyTextIndex(model, options) {
 				? [_.trim(terms.join(' '))]
 				: terms
 			)
-			.map(term => searchSettings.termsModify(term)) // Mangle terms to remove burring etc.
+			.map(term => searchSettings.cleanTerms(term)) // Mangle terms to remove burring etc.
 			.map(term => new RegExp(term.replace(/[|\\{}()[\]^$+*?.]/g, '\\$&'), 'i')) // Encode each term as a RegExp
 			.value();
 
