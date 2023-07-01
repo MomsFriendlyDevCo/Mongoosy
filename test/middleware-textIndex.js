@@ -20,7 +20,7 @@ describe('Middleware: TextSearch', function() {
 
 	before('wait for reindexing', ()=> mongoosy.models.movies.$indexBuilding);
 
-	it('simple director string search', ()=>
+	it('simple string search', ()=>
 		mongoosy.models.movies.textSearch('luhrmann')
 			.then(res => {
 				expect(res).to.be.an('array');
@@ -28,7 +28,7 @@ describe('Middleware: TextSearch', function() {
 				res.forEach(r => {
 					expect(r).to.have.property('title');
 					expect(r).to.have.property('year');
-					expect(r.toObject()._score).to.be.above(0);
+					expect(r._score).to.be.above(0);
 				});
 			})
 	);
@@ -41,9 +41,10 @@ describe('Middleware: TextSearch', function() {
 			})
 	);
 
-	it('compound query', ()=>
-		mongoosy.models.movies.textSearch('luhrmann')
-			.find({year: 2013})
+	it('query + additional filters', ()=>
+		mongoosy.models.movies.textSearch('luhrmann', {
+			match: {year: 2013},
+		})
 			.then(res => {
 				expect(res).to.be.an('array');
 				expect(res).to.have.length(1);

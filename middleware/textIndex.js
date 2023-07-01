@@ -1,31 +1,34 @@
-var _ = require('lodash');
-var mongoosy = require('../src/mongoosy');
+const _ = require('lodash');
+const mongoosy = require('../src/mongoosy');
 const stringSplit = require('string-split-by');
+const {inspect} = require('node:util');
 
 /**
 * Add [MODEL|QUERY].textIndex() via middleware to create + search text index fields
 * @param {Object} [options] Additional options to mutate behaviour
 * @param {String} [options.path="_textIndex"] The path within the MongooseDocument to save the computed data
 * @param {Function} [options.cleanTerms] Function to clean up tokens prior to indexing, defaults to applying uppercase + debug + replacing awkward characters (but preserving email addresses). Called as `(terms:Array<String>)`
-* @param {Boolean} [options.acceptTags=true] Use the tag parsing middleware prior to searching if it is available
-* @param {merge
+* @param {Boolean|String} [options.tags='auto'] Use the tag parsing middleware prior to searching if it is available. Set to `'auto'` to use if the tags middleware is available
+* @param {Function} [options.log] Logging output function
 *
 * @param {Array<Object>} [options.fields] Collection of fields to index
 * @param {String} [options.fields.path] Static path to index (conflicts with 'name')
 * @param {String} [options.fields.name] Dynamic item to index (conflicts with 'path')
 * @param {Number} [options.fields.weight] Search weighting to apply, higher weight is higher priority
 * @param {Function} [options.fields.handler] Function to calculate the term value if `name` is also specified. Called as `(doc)`
+*
+* @example Index a user lastname + age
+* MODEL.use(mongoosyTextIndex, {
+*   fields: [
+*     {path: 'lastname', weight: 10},
+*     {name: 'age', weight: 20, handler: doc => doc.getUserAge()},
+*   ],
+* })
 */
 module.exports = function MongoosyTextIndex(model, options) {
 	var settings = {
 		path: '_textIndex',
-		fields: [
-			// Use static path
-			// {path: 'lastName', weight: 10},
-
-			// Use (sync/async) handler function, can be a promise return
-			// {name: 'ref', weight: 20, handler() {...}}
-		],
+		fields: [],
 		cleanTerms: v => _.chain(v)
 			.toString()
 			.thru(v => v.toUpperCase())
@@ -39,7 +42,14 @@ module.exports = function MongoosyTextIndex(model, options) {
 			.join(' ')
 			.trim()
 			.value(),
-		acceptTags: true,
+		log(...args) {
+			console.log('[Mongoosy/TextSearch]', ...args.map(a =>
+				typeof a == 'object'
+					? inspect(a, {depth: 5, colors: true})
+					: a
+			));
+		},
+		tags: 'auto',
 		...options,
 	};
 	// Sanity checks {{{
@@ -80,108 +90,143 @@ module.exports = function MongoosyTextIndex(model, options) {
 	model.$indexBuilding = model.createIndexes()
 	// }}}
 
-	// MODEL.textSearch(text, opts) + QUERY.textSearch(text, opts) {{{
+	// MODEL.textSearch(text, opts) {{{
 	/**
 	* Fuzzy text index search using the declared search fields
 	* @param {String} terms Search terms to filter
 	* @param {Object} [options] Additional options
+	* @param {Object} [options.match] Additional $match fields to filter by
+	* @param {Number} [options.skip] Number of records to skip
+	* @param {Number} [options.limit] Number of records to limit by
 	* @param {String} [options.scoreField="_score"] Append the search score as this field, set to falsy to disable.
 	* @param {Boolean} [options.sortByScore=true] Sort results by the score, descending
 	* @param {Boolean} [options.count=false] Return only the count of matching documents, optimizing various parts of the search functionality
-	* @param {Boolean} [options.acceptTags=true] Whether to process specified tags. If falsy tag contents are ignored and removed from the term
+	* @param {Boolean} [options.tags=true] Whether to process specified tags. If falsy tag contents are ignored and removed from the term
 	* @param {RegExp} [options.tagsRe] RegExp used to split tags
-	* @returns {array<Object>} An array of matching documents with the meta `scoreField`
+	* @returns {Mongoose.Aggregate} Mongoose aggregation instance (NOTE: Eventual contents will be POJOs if treated as a thenable, not a MongooseDocument)
 	*/
-	model.addQueryMethod('textSearch', function mongooseTextSearch(terms, options) {
+	model.textSearch = function mongooseTextSearch(terms, options) {
 		var query = this;
 		var searchStart = Date.now();
 		var searchSettings = {
-			filter: undefined,
-			populate: undefined,
-			limit: 50,
-			skip: 0,
+			match: false,
+			skip: false,
+			limit: false,
 			count: false,
-			wholeTerm: false,
 			scoreField: '_score',
 			sortByScore: true,
-			log: console.log.bind(this, 'TextSearch'),
 			..._.cloneDeep(settings),
 			...options,
 		};
 
-		// Ensure parameters are integers
-		['skip', 'limit'].forEach(k => searchSettings[k] = parseInt(searchSettings[k]));
-
-		var termsRE = _.chain(terms)
-			.tap(v => console.log('Perform text search', {terms}))
-			.thru(terms => stringSplit(terms, /\s+/, {
-				ignore: ['"', "'", '()'], // Preserve compound terms with speachmarks + brackets
-				escape: true, // Allow escaping of terms
-			}))
-			.map(term => /^["'\(].+["'\)]$/.test(term) ? term.slice(1, -1) : term) // Remove wrapping for combined terms
-			.filter(term => { // Remove tags
-				var tagBits = searchSettings.tagsRe.exec(term);
-				if (tagBits) searchSettings.log('tag', tagBits.groups.tag.toLowerCase(), _.has(searchSettings.tags, tagBits.groups.tag.toLowerCase()));
-				if (tagBits && searchSettings.acceptTags && searchSettings.tags[tagBits.groups.tag.toLowerCase()]) { // Found a valid tag and we are accepting tags
-					searchSettings.mergeTags[tagBits.groups.tag.toLowerCase()] = tagBits.groups.val;
-					return false; // Remove from output list of terms
-				} else if (tagBits && !searchSettings.acceptTags) { // Found a tag but we're ignoring them anyway
-					// Do nothing
-					return false;
-				} else if (tagBits && searchSettings.acceptTags && !searchSettings.tags[tagBits.groups.tag.toLowerCase()]) { // Found a tag but its invalid
-					searchSettings.log(`Invalid tag passed in search query ${tagBits.groups.tag}:${tagBits.groups.val} - tag ignored`);
-					return false; // Remove from output list of terms
-				} else {
-					return true;
+		return Promise.resolve()
+			// Determine if we can use tags {{{
+			.then(()=> {
+				if (searchSettings.tags === 'auto') {
+					searchSettings.tags = !!model.parseTags;
+				} else if (searchSettings.tags && !model.parseTags) {
+					throw new Error('Specified {tags:true} but the tags middleware is not loaded');
 				}
 			})
-			.filter(Boolean) // Remove empty terms
-			.thru(terms => settings.wholeTerm && terms.length > 0 // Wrap terms in speachmarks if we only accept wholeTerm (and they are not already)
-				? [_.trim(terms.join(' '))]
-				: terms
+			// }}}
+			// Determine fuzzy search, tags + other filters {{{
+			.then(()=> searchSettings.tags // Can use tags?
+				? model.parseTags(terms) // Parse via tags middleware
+				: {fuzzy: terms, tags: {}, aggregation: []} // Assume all terms are fuzzy
 			)
-			.map(term => searchSettings.cleanTerms(term)) // Mangle terms to remove burring etc.
-			.map(term => new RegExp(term.replace(/[|\\{}()[\]^$+*?.]/g, '\\$&'), 'i')) // Encode each term as a RegExp
-			.value();
+			.then(({fuzzy, tags, aggregation})=> {
+				searchSettings.log(
+					`Performing ${!searchSettings.count ? 'textSearch' : 'textSearch+count'} on`,
+					'collection=', model.collectionName,
+					'fuzzy=', fuzzy ? `"${fuzzy}"` : '[none]',
+					'tags=', searchSettings.tags
+						? _(tags)
+							.map((v, k) => `${k}:${v}`)
+							.thru(v => v.length > 0 ? v.join(', ') : '[none]')
+							.value()
+						: '[disabled]',
+				);
 
-		searchSettings.log(
-			`Performing ${!searchSettings.count ? 'textSearch' : 'textSearch+count'} on`,
-			'collection=', model.collectionName,
-			'raw query=', `"${terms}"`,
-			'RE query=', termsRE.map(t => t.toString()).join(', '),
-			'tags=', _(searchSettings.mergeTags)
-				.map((v, k) => `${k}:${v}`)
-				.thru(v => v.length > 0 ? v.join(', ') : '[none]')
-				.value(),
-		);
+				return {fuzzy, aggregation};
+			})
+			// }}}
+			// Compute aggregation {{{
+			.then(({fuzzy, aggregation}) => {
+				let agg = [];
 
-		if (searchSettings.count) {
-			return query.countDocuments({
-				$text: {
-					$search: terms,
-					$caseSensitive: false,
-					$diacriticSensitive: false,
-				},
-			});
-		} else {
-			query.setQuery({$text: {
-				$search: terms,
-				$caseSensitive: false,
-				$diacriticSensitive: false,
-			}});
+				// $match - Fuzzy next matcher (top level matcher) + search settings matcher {{{
+				if (fuzzy)
+					agg.push({$match: {
+						$text: {
+							$search: fuzzy,
+							$caseSensitive: false,
+							$diacriticSensitive: false,
+						},
+					}});
+				// }}}
 
-			if (searchSettings.scoreField)
-				query.projection({
-					[searchSettings.scoreField]: {
-						$meta: 'textScore'
-					},
-				})
+				// $match - searchSettings.match {{{
+				if (searchSettings.match && searchSettings.match.length > 0)
+					agg.push({$match: searchSettings.match});
+				// }}}
 
-			if (settings.sortByScore)
-				query.sort({score: {$meta: 'textScore'}});
+				// $match - apply all other tag aggregations {{{
+				aggregation = aggregation.filter(a => {
+					if (a.$match) {
+						agg.push(a);
+						return false; // Remove from aggregation buffer
+					}
+				});
+				if (aggregation.length > 0) {
+					settings.log('Remaining aggregations:', aggregation);
+					throw new Error('Aggregations remaining after $match fields extracted, this buffer should be empty');
+				}
+				// }}}
 
-			return query;
-		}
-	});
+				// $addFields - Project score field (if searchSettings.scoreField) {{{
+				if (searchSettings.scoreField && fuzzy)
+					agg.push({$addFields: {
+						[searchSettings.scoreField]: {
+							$meta: 'textScore'
+						},
+					}});
+				// }}}
+
+				// $sort - Sort by score (if searchSettings.sortByScore) {{{
+				if (searchSettings.scoreField && searchSettings.sortByScore && fuzzy)
+					agg.push({$sort: {
+						[searchSettings.scoreField]: -1,
+					}});
+				// }}}
+
+				// $skip (if searchSettings.skip) {{{
+				if (searchSettings.skip)
+					agg.push({$skip: searchSettings.skip});
+				// }}}
+
+				// $limit (if searchSettings.limit) {{{
+				if (searchSettings.limit)
+					agg.push({$limit: searchSettings.limit});
+				// }}}
+
+				// $count (if searchSettings.count) {{{
+				if (searchSettings.count)
+					agg.push({$count: 'count'});
+				// }}}
+
+				return agg;
+			})
+			// }}}
+			// Perform aggregation {{{
+			.then(aggregation => {
+				searchSettings.log('Perform aggregation', aggregation);
+				return model.aggregate(aggregation)
+					.then(result => searchSettings.count // Collapse .count field if we're just after the result
+						? result?.[0]?.count || 0
+						: result
+					)
+			})
+			// }}}
+	};
 	// }}}
 }

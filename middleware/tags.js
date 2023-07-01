@@ -1,3 +1,4 @@
+const {inspect} = require('node:util');
 const stringSplit = require('string-split-by');
 
 /**
@@ -7,6 +8,7 @@ const stringSplit = require('string-split-by');
 * @param {RegExp} [options.stringSplitBy=/\s+/] How to split the incomming terms string
 * @param {Array<String>} [options.stringSplitIgnore] What string characters to preserve when splitting - defaults to preserving compound terms with speachmarks + brackets
 * @param {Function} [options.unwrap] Overriding function on how to unwrap speachmarks around a string
+* @param {Function} [options.log] Logging output function
 */
 module.exports = function MongoosyTags(model, options) {
 	var settings = {
@@ -16,6 +18,13 @@ module.exports = function MongoosyTags(model, options) {
 		unwrap: w => /^["'\(].+["'\)]$/.test(w) // Remove wrapping for combined terms
 			? w.slice(1, -1)
 			: w,
+		log(...args) {
+			console.log('[Mongoosy/Tags]', ...args.map(a =>
+				typeof a == 'object'
+					? inspect(a, {depth: 5, colors: true})
+					: a
+			));
+		},
 		...options,
 	};
 	// Sanity checks {{{
@@ -57,7 +66,11 @@ module.exports = function MongoosyTags(model, options) {
 					} else { // Looks like a valid tag
 						// Clean up value tag + validate
 						parsedTerm.key = parsedTerm.key.toLowerCase();
-						if (!settings.tags[parsedTerm.key]) return parsed.fuzzy.push(term); // Invalid tag
+						if (!settings.tags[parsedTerm.key]) {
+							settings.log(`Tag "${parsedTerm.key}" is invalid or not defined`);
+							return parsed.fuzzy.push(term); // Invalid tag
+						}
+
 						parsedTerm.value = settings.unwrap(parsedTerm.value);
 
 						// Allocate tag to parsed output

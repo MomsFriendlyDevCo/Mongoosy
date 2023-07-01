@@ -91,6 +91,7 @@ before('create movies collection', function() {
 				rank: 'number',
 				running_time_secs: 'number',
 				actors: ['string'],
+				rating: 'number',
 			},
 		}).compile())
 		.then(()=> mongoosy.scenario(`${__dirname}/data/movies.json`))
@@ -104,6 +105,6 @@ before('check movie data has loaded', ()=> mongoosy.models.movies.countDocuments
 );
 // }}}
 
-after('drop database', ()=> mongoosy.dropDatabase({$confirmDrop: true}));
+// after('drop database', ()=> mongoosy.dropDatabase({$confirmDrop: true}));
 
 after('disconnect', ()=> mongoosy.disconnect());

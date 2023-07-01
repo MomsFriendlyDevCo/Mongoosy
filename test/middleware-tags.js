@@ -1,6 +1,7 @@
 var expect = require('chai').expect;
 var moment = require('moment');
 var mongoosy = require('..');
+var searchMiddleware = require('../middleware/textIndex');
 var tagsMiddleware = require('../middleware/tags');
 const momentParseFormats = ['YYYY-MM-DD', 'D/M/YYYY', 'D/M/YYYY', 'D/M/YY', 'D/M']; // Array of formats to pass to moment(value, FORMATS) to parse dates
 
@@ -8,24 +9,32 @@ require('./setup');
 
 describe('Middleware: Tags', function() {
 
+	before('create search index', ()=> mongoosy.schemas.movies.use(searchMiddleware, {
+		fields: [
+			{path: 'title', weight: 100},
+			{path: 'info.directors', weight: 50},
+			{path: 'year', weight: 10},
+		],
+	}));
+
 	before('setup tags middleware', ()=> mongoosy.schemas.movies.use(tagsMiddleware, {
 		tags: {
 			// Query genre by CSV
 			// is:(csv-of-genres)
 			is(v) { return {$match: {
-				genres: {$in: v.split(/\s*,\s*/)},
+				'info.genres': {$in: v.split(/\s*,\s*/)},
 			}}},
 
 			// Query the release year by date
 			// after:(dateish)
 			after(v) { return {$match: {
-				year: {$gte: moment(v, momentParseFormats).utc().startOf('day').toDate()},
+				year: {$gte: +moment(v, momentParseFormats).utc().startOf('day').format('YYYY')},
 			}}},
 
 			// Query the release year by date
 			// before:(dateish)
 			before(v) { return {$match: {
-				year: {$lte: moment(v, momentParseFormats).utc().endOf('day').toDate()},
+				year: {$lte: +moment(v, momentParseFormats).utc().endOf('day').format('YYYY')},
 			}}},
 
 			// Use whole numbers to query the rating. e.g. '2' -> '>=2 && <=3'
@@ -38,9 +47,9 @@ describe('Middleware: Tags', function() {
 				if (!ratingFrom || !ratingTo) throw new Error(`Cannot parse stars:from-to search tag: "${v}"`);
 
 				return {$match: {
-					rating: {
+					'info.rating': {
 						$gte: ratingFrom,
-						$lte: ratingTo,
+						$lt: ratingTo + 1,
 					},
 				}};
 			},
@@ -48,6 +57,8 @@ describe('Middleware: Tags', function() {
 	}));
 
 	before('compile schema', ()=> mongoosy.schemas.movies.compile());
+
+	before('wait for reindexing', ()=> mongoosy.models.movies.$indexBuilding);
 
 	it('should parse tags', ()=>
 		mongoosy.models.movies.parseTags('foo after:2000-01-01 bar before:"2015-12-31" stars:3-5 baz')
@@ -66,91 +77,103 @@ describe('Middleware: Tags', function() {
 
 				expect(res).to.have.property('aggregation');
 				expect(res.aggregation).to.be.deep.equal([
-					{$match: {year: {$gte: new Date('1999-12-31T00:00:00.000Z')}}},
-					{$match: {year: {$lte: new Date('2015-12-30T23:59:59.999Z')}}},
-					{$match: {rating: {$gte: 3, $lte: 5}}},
+					{$match: {year: {$gte: 1999}}},
+					{$match: {year: {$lte: 2015}}},
+					{$match: {'info.rating': {$gte: 3, $lt: 6}}},
 				]);
 			})
 	);
 
-	it('simple regular search with no value (return everything)', ()=>
-		mongoosy.models.movies.search(null, {count: true})
+	['textSearch'].forEach(findMethod => {
+
+	it(`${findMethod}: [no value / return everything]`, ()=>
+		mongoosy.models.movies[findMethod]('', {count: true})
 			.then(res => {
 				expect(res).to.be.a('number');
-				expect(res).to.equal(666);
+				expect(res).to.equal(4609);
 			})
 	);
 
-	it('regular search against: genre:Comedy', ()=>
-		mongoosy.models.movies.search('genre:Comedy', {count: true})
+	it(`${findMethod}: is:Comedy`, ()=>
+		mongoosy.models.movies[findMethod]('is:Comedy', {count: true})
 			.then(res => {
 				expect(res).to.be.a('number');
-				expect(res).to.equal(666);
+				expect(res).to.equal(1615);
 			})
 	);
 
-	it('regular search against: genre:Comedy,Drama', ()=>
-		mongoosy.models.movies.search('genre:Comedy,Drama', {count: true})
+	it(`${findMethod}: is:Comedy,Drama`, ()=>
+		mongoosy.models.movies[findMethod]('is:Comedy,Drama', {count: true})
 			.then(res => {
 				expect(res).to.be.a('number');
-				expect(res).to.equal(666);
+				expect(res).to.equal(3350);
 			})
 	);
 
-	it('regular search against: genre:"Comedy, Drama"', ()=>
-		mongoosy.models.movies.search('genre:"Comedy, Drama"', {count: true})
+	it(`${findMethod}: is:"Comedy, Drama"`, ()=>
+		mongoosy.models.movies[findMethod]('is:"Comedy, Drama"', {count: true})
 			.then(res => {
 				expect(res).to.be.a('number');
-				expect(res).to.equal(666);
+				expect(res).to.equal(3350);
 			})
 	);
 
-	it('regular search against: "genre:Comedy, Drama"', ()=>
-		mongoosy.models.movies.search('"genre:Comedy, Drama"', {count: true})
+	it(`${findMethod}: "is:Comedy, Drama"`, ()=>
+		mongoosy.models.movies[findMethod]('"is:Comedy, Drama"', {count: true})
 			.then(res => {
 				expect(res).to.be.a('number');
-				expect(res).to.equal(666);
+				expect(res).to.equal(3350);
 			})
 	);
 
-	it('regular search against: Miller "genre:Comedy, Crime"', ()=>
-		mongoosy.models.movies.search('Miller "genre:Comedy, Crime"', {count: true})
+	it(`${findMethod}: Miller "is:Comedy, Drama"`, ()=>
+		mongoosy.models.movies[findMethod]('Miller "is:Comedy, Drama"', {count: true})
 			.then(res => {
 				expect(res).to.be.a('number');
-				expect(res).to.equal(666);
+				expect(res).to.equal(23);
 			})
 	);
 
-	it('regular search against: "genre:Comedy, Crime" Miller', ()=>
-		mongoosy.models.movies.search('"genre:Comedy, Crime" Miller', {count: true})
+	it(`${findMethod}: "is:Comedy, Drama" Miller`, ()=>
+		mongoosy.models.movies[findMethod]('"is:Comedy, Drama" Miller', {count: true})
 			.then(res => {
 				expect(res).to.be.a('number');
-				expect(res).to.equal(666);
+				expect(res).to.equal(23);
 			})
 	);
 
-	it('regular search against: "stars:1"', ()=>
-		mongoosy.models.movies.search('stars:1', {count: true})
+	it(`${findMethod}: "stars:5"`, ()=>
+		mongoosy.models.movies[findMethod]('stars:5', {count: true})
 			.then(res => {
 				expect(res).to.be.a('number');
-				expect(res).to.equal(666);
+				expect(res).to.equal(935);
 			})
 	);
 
-	it('regular search against: "stars:1-2"', ()=>
-		mongoosy.models.movies.search('stars:1-2', {count: true})
+	it(`${findMethod}: "stars:1-2"`, ()=>
+		mongoosy.models.movies[findMethod]('stars:1-2', {count: true})
 			.then(res => {
 				expect(res).to.be.a('number');
-				expect(res).to.equal(666);
+				expect(res).to.equal(29);
 			})
 	);
 
-	it('regular search against: after:2000-01-01 before:2015-12-31 stars:5', ()=>
-		mongoosy.models.movies.search('after:2000-01-01 before:2015-12-31 stars:5', {count: true})
+	it(`${findMethod}: after:2000-01-01 before:2015-12-31 stars:5`, ()=>
+		mongoosy.models.movies[findMethod]('after:2000-01-01 before:2015-12-31 stars:5', {count: true})
 			.then(res => {
 				expect(res).to.be.a('number');
-				expect(res).to.equal(666);
+				expect(res).to.equal(733);
 			})
 	);
+
+	it(`${findMethod}: unsupported:tag`, ()=>
+		mongoosy.models.movies[findMethod]('unsupported:tag Miller', {count: true})
+			.then(res => {
+				expect(res).to.be.a('number');
+				expect(res).to.equal(33);
+			})
+	);
+
+	});
 
 });
