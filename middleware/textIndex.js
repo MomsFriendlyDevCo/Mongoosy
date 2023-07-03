@@ -6,7 +6,7 @@ const {inspect} = require('node:util');
 /**
 * Add [MODEL|QUERY].textIndex() via middleware to create + search text index fields
 * @param {Object} [options] Additional options to mutate behaviour
-* @param {String} [options.path="_textIndex"] The path within the MongooseDocument to save the computed data
+* @param {String} [options.textIndexPath="_textIndex"] The path within the MongooseDocument to save the computed data
 * @param {Function} [options.cleanTerms] Function to clean up tokens prior to indexing, defaults to applying uppercase + debug + replacing awkward characters (but preserving email addresses). Called as `(terms:Array<String>)`
 * @param {Boolean|String} [options.tags='auto'] Use the tag parsing middleware prior to searching if it is available. Set to `'auto'` to use if the tags middleware is available
 * @param {Function} [options.log] Logging output function
@@ -27,7 +27,7 @@ const {inspect} = require('node:util');
 */
 module.exports = function MongoosyTextIndex(model, options) {
 	var settings = {
-		path: '_textIndex',
+		textIndexPath: '_textIndex',
 		fields: [],
 		cleanTerms: v => _.chain(v)
 			.toString()
@@ -60,7 +60,7 @@ module.exports = function MongoosyTextIndex(model, options) {
 
 	// Create text index against the model {{{
 	// FIXME: Need to edit schema with 'text' type?
-	// model.schema.add({[settings.path]: 'text'});
+	// model.schema.add({[settings.textIndexPath]: 'text'});
 
 	model.schema.index(
 		// Specify all fields as 'text' type
@@ -73,7 +73,7 @@ module.exports = function MongoosyTextIndex(model, options) {
 				.map(f => [f.path, 'text'])
 		),
 		{
-			name: settings.path,
+			name: settings.textIndexPath,
 			weights: Object.fromEntries(
 				settings.fields
 					.filter(f => {
