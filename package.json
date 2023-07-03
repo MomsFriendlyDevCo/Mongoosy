@@ -8,7 +8,8 @@
     "url": "git://github.com/MomsFriendlyDevCo/Mongoosy.git"
   },
   "scripts": {
-    "test": "mocha"
+    "test": "mocha",
+    "test:middleware": "MONGOOSY_SKIP_REBUILD=1 mocha -b test/middleware-*.js"
   },
   "keywords": [
     "mongo",

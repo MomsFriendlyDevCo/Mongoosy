@@ -6,7 +6,10 @@ const {inspect} = require('node:util');
 /**
 * Add [MODEL|QUERY].textIndex() via middleware to create + search text index fields
 * @param {Object} [options] Additional options to mutate behaviour
-* @param {String} [options.textIndexPath="_textIndex"] The path within the MongooseDocument to save the computed data
+* @param {String} [options.method='$text'] Method to use when indexing / searching. ENUM: '$text', '$search'
+* @param {String} [options.textIndexPath="_textIndex"] The path within the MongooseDocument to save the computed text-index data
+* @param {String} [options.searchIndexPath="_searchIndex"] The path within the MongooseDocument to save the computed search index data
+* @param {Boolean} [options.createIndex=true] Attempt to create the text / search index
 * @param {Function} [options.cleanTerms] Function to clean up tokens prior to indexing, defaults to applying uppercase + debug + replacing awkward characters (but preserving email addresses). Called as `(terms:Array<String>)`
 * @param {Boolean|String} [options.tags='auto'] Use the tag parsing middleware prior to searching if it is available. Set to `'auto'` to use if the tags middleware is available
 * @param {Function} [options.log] Logging output function
@@ -14,8 +17,9 @@ const {inspect} = require('node:util');
 * @param {Array<Object>} [options.fields] Collection of fields to index
 * @param {String} [options.fields.path] Static path to index (conflicts with 'name')
 * @param {String} [options.fields.name] Dynamic item to index (conflicts with 'path')
-* @param {Number} [options.fields.weight] Search weighting to apply, higher weight is higher priority
+* @param {Number} [options.fields.weight] Search weighting to apply, higher weight is higher priority. method=$text only
 * @param {Function} [options.fields.handler] Function to calculate the term value if `name` is also specified. Called as `(doc)`
+* @param {String} [options.fields.type='string'] Data type to store with simple index paths (see https://www.mongodb.com/docs/atlas/atlas-search/define-field-mappings/#data-types ). method=$search only
 *
 * @example Index a user lastname + age
 * MODEL.use(mongoosyTextIndex, {
@@ -27,7 +31,10 @@ const {inspect} = require('node:util');
 */
 module.exports = function MongoosyTextIndex(model, options) {
 	var settings = {
+		method: '$search', // FIXME: Should be $text
 		textIndexPath: '_textIndex',
+		searchIndexPath: 'searchIndex', // Index name may only contain letters, numbers, hyphens, or underscores
+		createIndex: false, // FIXME: should be true
 		fields: [],
 		cleanTerms: v => _.chain(v)
 			.toString()
@@ -43,7 +50,7 @@ module.exports = function MongoosyTextIndex(model, options) {
 			.trim()
 			.value(),
 		log(...args) {
-			console.log('[Mongoosy/TextSearch]', ...args.map(a =>
+			console.log('[Mongoosy/Search]', ...args.map(a =>
 				typeof a == 'object'
 					? inspect(a, {depth: 5, colors: true})
 					: a
@@ -53,41 +60,122 @@ module.exports = function MongoosyTextIndex(model, options) {
 		...options,
 	};
 	// Sanity checks {{{
+	if (!['$text', '$search'].includes(settings.method)) throw new Error('Method must be "$text" / "$search" only');
 	if (!settings.fields?.length) throw new Error('Must specify at least one field to index');
 	// }}}
 
 	// }}}
 
-	// Create text index against the model {{{
-	// FIXME: Need to edit schema with 'text' type?
-	// model.schema.add({[settings.textIndexPath]: 'text'});
+	if (settings.createIndex && settings.method == '$text') {
+		// Create $text index {{{
+		model.schema.index(...model.textSearchIndex());
 
-	model.schema.index(
-		// Specify all fields as 'text' type
-		Object.fromEntries(
-			settings.fields
+		// Sync indexes from schema to models
+		// Model.$indexBuilding is a waitable promise
+		model.$indexBuilding = model.createIndexes();
+		// }}}
+	} else if (settings.createIndex && settings.method == '$search') {
+		// Create $search index {{{
+		let cmd = model.textSearchIndex();
+		console.warn('Run DB command', inspect(cmd, {depth: 9, colors: true}));
+		console.warn('FIXME: Skip index build');
+		/*
+		model.$indexBuilding = mongoosy.connection.db.command(cmd)
+			.catch(e => {
+				if (/no such command: 'createSearchIndexes'/.test(e.toString())) {
+					throw new Error(`Cannot create $search index - are you sure this is a Mongo Atlas endpoint? - ${e.toString()}`);
+				} else {
+					console.warn('Error while trying to run createSearchIndexes');
+					throw e;
+				}
+			})
+		*/
+		// }}}
+	}
+
+	// MODEL.testSearchIndex(opts) {{{
+	/**
+	* Generate the syntax to create the text / search indexes against the mode
+	* This is automatically called if `{createIndex: true}` when attaching the main middleware
+	*
+	* If trying to create a $text index this returns the index spec that should be passed to MODEL.createIndex(), if using $search this needs to be run via db.runCommand
+	*
+	* @returns {*} The specification of the selected index
+	*/
+	model.textSearchIndex = function mongooseTextSearchIndex(options) {
+		var indexSettings = {
+			..._.cloneDeep(settings),
+			...options,
+		};
+
+		if (indexSettings.method == '$text') {
+			// Specify all fields as 'text' type
+			return [
+				Object.fromEntries(
+					settings.fields
+						.filter(f => {
+							if (f.path) return true;
+							console.warn('Ignoring unsupported text-index field type', f);
+						})
+						.map(f => [f.path, 'text'])
+				),
+				{
+					name: settings.textIndexPath,
+					weights: Object.fromEntries(
+						settings.fields
+							.filter(f => {
+								if (f.path) return true;
+								console.warn('Ignoring unsupported text-index field type', f);
+							})
+							.map(f => [f.path, f.weight])
+					),
+				}
+			];
+		} else if (indexSettings.method == '$search') {
+			let cmd = {
+				createSearchIndexes: model.collectionName,
+				indexes: [{
+					name: indexSettings.searchIndexPath,
+					definition: {
+						mappings: {
+							dynamic: false,
+							fields: {},
+						},
+					},
+				}],
+			};
+
+			// Break dotted notation paths into nested document search indexes
+			let rootPath = ['indexes', 0, 'definition', 'mappings', 'fields'];
+			indexSettings.fields
 				.filter(f => {
 					if (f.path) return true;
 					console.warn('Ignoring unsupported text-index field type', f);
 				})
-				.map(f => [f.path, 'text'])
-		),
-		{
-			name: settings.textIndexPath,
-			weights: Object.fromEntries(
-				settings.fields
-					.filter(f => {
-						if (f.path) return true;
-						console.warn('Ignoring unsupported text-index field type', f);
-					})
-					.map(f => [f.path, f.weight])
-			),
-		},
-	);
+				.forEach(f => {
+					let pathSegments = f.path.split('.');
 
-	// Sync indexes from schema to models
-	// Model.$indexBuilding is a waitable promise
-	model.$indexBuilding = model.createIndexes()
+					if (pathSegments.length == 1) { // Top level path
+						_.set(cmd, [...rootPath, ...pathSegments, 'type'], f.type || 'string');
+					} else { // Nested path {
+						let parentPath = [
+							...rootPath,
+							pathSegments[0],
+						];
+						_.set(cmd, [...parentPath, 'type'], 'document');
+
+						let nodePath = [
+							...parentPath,
+							...pathSegments.slice(1).flatMap(seg => ['fields', seg])
+						];
+
+						_.set(cmd, [...nodePath, 'type'], f.type || 'string');
+					}
+				});
+
+			return cmd;
+		}
+	};
 	// }}}
 
 	// MODEL.textSearch(text, opts) {{{
@@ -103,6 +191,7 @@ module.exports = function MongoosyTextIndex(model, options) {
 	* @param {Boolean} [options.count=false] Return only the count of matching documents, optimizing various parts of the search functionality
 	* @param {Boolean} [options.tags=true] Whether to process specified tags. If falsy tag contents are ignored and removed from the term
 	* @param {RegExp} [options.tagsRe] RegExp used to split tags
+	* @param {Array<String>} [options.searchPaths] Paths to search in the search index, auto-computed as a wildcard if omitted. method=$search only
 	* @returns {Mongoose.Aggregate} Mongoose aggregation instance (NOTE: Eventual contents will be POJOs if treated as a thenable, not a MongooseDocument)
 	*/
 	model.textSearch = function mongooseTextSearch(terms, options) {
@@ -115,6 +204,7 @@ module.exports = function MongoosyTextIndex(model, options) {
 			count: false,
 			scoreField: '_score',
 			sortByScore: true,
+			searchPaths: {wildcard: '*'},
 			..._.cloneDeep(settings),
 			...options,
 		};
@@ -155,18 +245,32 @@ module.exports = function MongoosyTextIndex(model, options) {
 				let agg = [];
 
 				// $match - Fuzzy next matcher (top level matcher) + search settings matcher {{{
-				if (fuzzy)
-					agg.push({$match: {
-						$text: {
-							$search: fuzzy,
-							$caseSensitive: false,
-							$diacriticSensitive: false,
-						},
-					}});
+				if (fuzzy) {
+					if (searchSettings.method == '$text') {
+						agg.push({$match: {
+							$text: {
+								$search: fuzzy,
+								$caseSensitive: false,
+								$diacriticSensitive: false,
+							},
+						}});
+					} else if (searchSettings.method == '$search') {
+						agg.push({$search: {
+							index: searchSettings.searchIndexPath,
+							text: {
+								query: fuzzy,
+								path: searchSettings.searchPaths,
+								fuzzy: {
+									prefixLength: 3,
+								},
+							},
+						}});
+					}
+				}
 				// }}}
 
 				// $match - searchSettings.match {{{
-				if (searchSettings.match && searchSettings.match.length > 0)
+				if (searchSettings.match && !_.isEmpty(searchSettings.match))
 					agg.push({$match: searchSettings.match});
 				// }}}
 
@@ -187,13 +291,13 @@ module.exports = function MongoosyTextIndex(model, options) {
 				if (searchSettings.scoreField && fuzzy)
 					agg.push({$addFields: {
 						[searchSettings.scoreField]: {
-							$meta: 'textScore'
+							$meta: searchSettings.method == '$text' ? 'textScore' : 'searchScore',
 						},
 					}});
 				// }}}
 
 				// $sort - Sort by score (if searchSettings.sortByScore) {{{
-				if (searchSettings.scoreField && searchSettings.sortByScore && fuzzy)
+				if (searchSettings.scoreField && searchSettings.sortByScore && fuzzy && searchSettings.method == '$text')
 					agg.push({$sort: {
 						[searchSettings.scoreField]: -1,
 					}});

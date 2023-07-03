@@ -84,90 +84,90 @@ describe('Middleware: Tags', function() {
 			})
 	);
 
-	['textSearch'].forEach(findMethod => {
+	['textSearch'].forEach(searchMethod => {
 
-	it(`${findMethod}: [no value / return everything]`, ()=>
-		mongoosy.models.movies[findMethod]('', {count: true})
+	it(`${searchMethod}: [no value / return everything]`, ()=>
+		mongoosy.models.movies[searchMethod]('', {count: true})
 			.then(res => {
 				expect(res).to.be.a('number');
 				expect(res).to.equal(4609);
 			})
 	);
 
-	it(`${findMethod}: is:Comedy`, ()=>
-		mongoosy.models.movies[findMethod]('is:Comedy', {count: true})
+	it(`${searchMethod}: is:Comedy`, ()=>
+		mongoosy.models.movies[searchMethod]('is:Comedy', {count: true})
 			.then(res => {
 				expect(res).to.be.a('number');
 				expect(res).to.equal(1615);
 			})
 	);
 
-	it(`${findMethod}: is:Comedy,Drama`, ()=>
-		mongoosy.models.movies[findMethod]('is:Comedy,Drama', {count: true})
+	it(`${searchMethod}: is:Comedy,Drama`, ()=>
+		mongoosy.models.movies[searchMethod]('is:Comedy,Drama', {count: true})
 			.then(res => {
 				expect(res).to.be.a('number');
 				expect(res).to.equal(3350);
 			})
 	);
 
-	it(`${findMethod}: is:"Comedy, Drama"`, ()=>
-		mongoosy.models.movies[findMethod]('is:"Comedy, Drama"', {count: true})
+	it(`${searchMethod}: is:"Comedy, Drama"`, ()=>
+		mongoosy.models.movies[searchMethod]('is:"Comedy, Drama"', {count: true})
 			.then(res => {
 				expect(res).to.be.a('number');
 				expect(res).to.equal(3350);
 			})
 	);
 
-	it(`${findMethod}: "is:Comedy, Drama"`, ()=>
-		mongoosy.models.movies[findMethod]('"is:Comedy, Drama"', {count: true})
+	it(`${searchMethod}: "is:Comedy, Drama"`, ()=>
+		mongoosy.models.movies[searchMethod]('"is:Comedy, Drama"', {count: true})
 			.then(res => {
 				expect(res).to.be.a('number');
 				expect(res).to.equal(3350);
 			})
 	);
 
-	it(`${findMethod}: Miller "is:Comedy, Drama"`, ()=>
-		mongoosy.models.movies[findMethod]('Miller "is:Comedy, Drama"', {count: true})
+	it(`${searchMethod}: Miller "is:Comedy, Drama"`, ()=>
+		mongoosy.models.movies[searchMethod]('Miller "is:Comedy, Drama"', {count: true})
 			.then(res => {
 				expect(res).to.be.a('number');
 				expect(res).to.equal(23);
 			})
 	);
 
-	it(`${findMethod}: "is:Comedy, Drama" Miller`, ()=>
-		mongoosy.models.movies[findMethod]('"is:Comedy, Drama" Miller', {count: true})
+	it(`${searchMethod}: "is:Comedy, Drama" Miller`, ()=>
+		mongoosy.models.movies[searchMethod]('"is:Comedy, Drama" Miller', {count: true})
 			.then(res => {
 				expect(res).to.be.a('number');
 				expect(res).to.equal(23);
 			})
 	);
 
-	it(`${findMethod}: "stars:5"`, ()=>
-		mongoosy.models.movies[findMethod]('stars:5', {count: true})
+	it(`${searchMethod}: "stars:5"`, ()=>
+		mongoosy.models.movies[searchMethod]('stars:5', {count: true})
 			.then(res => {
 				expect(res).to.be.a('number');
 				expect(res).to.equal(935);
 			})
 	);
 
-	it(`${findMethod}: "stars:1-2"`, ()=>
-		mongoosy.models.movies[findMethod]('stars:1-2', {count: true})
+	it(`${searchMethod}: "stars:1-2"`, ()=>
+		mongoosy.models.movies[searchMethod]('stars:1-2', {count: true})
 			.then(res => {
 				expect(res).to.be.a('number');
 				expect(res).to.equal(29);
 			})
 	);
 
-	it(`${findMethod}: after:2000-01-01 before:2015-12-31 stars:5`, ()=>
-		mongoosy.models.movies[findMethod]('after:2000-01-01 before:2015-12-31 stars:5', {count: true})
+	it(`${searchMethod}: after:2000-01-01 before:2015-12-31 stars:5`, ()=>
+		mongoosy.models.movies[searchMethod]('after:2000-01-01 before:2015-12-31 stars:5', {count: true})
 			.then(res => {
 				expect(res).to.be.a('number');
 				expect(res).to.equal(733);
 			})
 	);
 
-	it(`${findMethod}: unsupported:tag`, ()=>
-		mongoosy.models.movies[findMethod]('unsupported:tag Miller', {count: true})
+	it(`${searchMethod}: unsupported:tag`, ()=>
+		mongoosy.models.movies[searchMethod]('unsupported:tag Miller', {count: true})
 			.then(res => {
 				expect(res).to.be.a('number');
 				expect(res).to.equal(33);
