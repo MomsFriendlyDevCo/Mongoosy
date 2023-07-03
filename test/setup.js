@@ -1,3 +1,8 @@
+/**
+* Basic database login + setup
+*
+* @param {Boolean} [process.env.MONGOOSY_SKIP_REBUILD=0] If truthy, skip the teardown stage of database build, only really useful if running the search / tag /middleware tests in isolation
+*/
 var expect = require('chai').expect;
 var mongoosy = require('..');
 
@@ -68,17 +73,25 @@ before('compile models', ()=> mongoosy.compileModels());
 
 // Import scenario data {{{
 before('setup scenario data', function() {
-	this.timeout(60 * 1000); //~ 1m
-	return mongoosy.scenario(require('./data/scenario'));
+	this.timeout(3 * 60 * 1000); //~ 3m
+
+	return Promise.resolve()
+		.then(()=> process.env.MONGOOSY_SKIP_REBUILD && mongoosy.models.users.count()
+			.then(docCount => docCount > 0 && Promise.reject('SKIP'))
+		)
+		.then(()=> mongoosy.scenario(require('./data/scenario')))
+		.catch(e => {
+			if (e === 'SKIP') return;
+			throw e;
+		})
 });
 // }}}
 
 // Setup movies {{{
 before('create movies collection', function() {
-	this.timeout(30 * 1000);
+	this.timeout(3 * 60 * 1000); //~ 3m
 
 	return Promise.resolve()
-		.then(()=> mongoosy.dropCollection('movies'))
 		.then(()=> mongoosy.schema('movies', {
 			title: {type: 'string', required: true},
 			year: {type: 'number', required: true},
@@ -94,7 +107,15 @@ before('create movies collection', function() {
 				rating: 'number',
 			},
 		}).compile())
+		.then(()=> process.env.MONGOOSY_SKIP_REBUILD && mongoosy.models.movies.count()
+			.then(docCount => docCount > 0 && Promise.reject('SKIP'))
+		)
+		.then(()=> mongoosy.dropCollection('movies'))
 		.then(()=> mongoosy.scenario(`${__dirname}/data/movies.json`))
+		.catch(e => {
+			if (e === 'SKIP') return;
+			throw e;
+		})
 });
 
 before('check movie data has loaded', ()=> mongoosy.models.movies.countDocuments()
@@ -105,6 +126,9 @@ before('check movie data has loaded', ()=> mongoosy.models.movies.countDocuments
 );
 // }}}
 
-// after('drop database', ()=> mongoosy.dropDatabase({$confirmDrop: true}));
+after('drop database', function() {
+	if (process.env.MONGOOSY_SKIP_REBUILD) return;
+	return mongoosy.dropDatabase({$confirmDrop: true});
+});
 
 after('disconnect', ()=> mongoosy.disconnect());
