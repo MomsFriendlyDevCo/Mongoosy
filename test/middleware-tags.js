@@ -84,10 +84,10 @@ describe('Middleware: Tags', function() {
 			})
 	);
 
-	['textSearch'].forEach(searchMethod => {
+	['$text', '$search'].forEach(searchMethod => {
 
 	it(`${searchMethod}: [no value / return everything]`, ()=>
-		mongoosy.models.movies[searchMethod]('', {count: true})
+		mongoosy.models.movies.search('', {method: searchMethod, count: true})
 			.then(res => {
 				expect(res).to.be.a('number');
 				expect(res).to.equal(4609);
@@ -95,7 +95,7 @@ describe('Middleware: Tags', function() {
 	);
 
 	it(`${searchMethod}: is:Comedy`, ()=>
-		mongoosy.models.movies[searchMethod]('is:Comedy', {count: true})
+		mongoosy.models.movies.search('is:Comedy', {method: searchMethod, count: true})
 			.then(res => {
 				expect(res).to.be.a('number');
 				expect(res).to.equal(1615);
@@ -103,7 +103,7 @@ describe('Middleware: Tags', function() {
 	);
 
 	it(`${searchMethod}: is:Comedy,Drama`, ()=>
-		mongoosy.models.movies[searchMethod]('is:Comedy,Drama', {count: true})
+		mongoosy.models.movies.search('is:Comedy,Drama', {method: searchMethod, count: true})
 			.then(res => {
 				expect(res).to.be.a('number');
 				expect(res).to.equal(3350);
@@ -111,7 +111,7 @@ describe('Middleware: Tags', function() {
 	);
 
 	it(`${searchMethod}: is:"Comedy, Drama"`, ()=>
-		mongoosy.models.movies[searchMethod]('is:"Comedy, Drama"', {count: true})
+		mongoosy.models.movies.search('is:"Comedy, Drama"', {method: searchMethod, count: true})
 			.then(res => {
 				expect(res).to.be.a('number');
 				expect(res).to.equal(3350);
@@ -119,7 +119,7 @@ describe('Middleware: Tags', function() {
 	);
 
 	it(`${searchMethod}: "is:Comedy, Drama"`, ()=>
-		mongoosy.models.movies[searchMethod]('"is:Comedy, Drama"', {count: true})
+		mongoosy.models.movies.search('"is:Comedy, Drama"', {method: searchMethod, count: true})
 			.then(res => {
 				expect(res).to.be.a('number');
 				expect(res).to.equal(3350);
@@ -127,23 +127,23 @@ describe('Middleware: Tags', function() {
 	);
 
 	it(`${searchMethod}: Miller "is:Comedy, Drama"`, ()=>
-		mongoosy.models.movies[searchMethod]('Miller "is:Comedy, Drama"', {count: true})
+		mongoosy.models.movies.search('Miller "is:Comedy, Drama"', {method: searchMethod, count: true})
 			.then(res => {
 				expect(res).to.be.a('number');
-				expect(res).to.equal(23);
+				expect(res).to.above(23); // 23 with $text, 26 with $search+fuzzy
 			})
 	);
 
 	it(`${searchMethod}: "is:Comedy, Drama" Miller`, ()=>
-		mongoosy.models.movies[searchMethod]('"is:Comedy, Drama" Miller', {count: true})
+		mongoosy.models.movies.search('"is:Comedy, Drama" Miller', {method: searchMethod, count: true})
 			.then(res => {
 				expect(res).to.be.a('number');
-				expect(res).to.equal(23);
+				expect(res).to.above(23);
 			})
 	);
 
 	it(`${searchMethod}: "stars:5"`, ()=>
-		mongoosy.models.movies[searchMethod]('stars:5', {count: true})
+		mongoosy.models.movies.search('stars:5', {method: searchMethod, count: true})
 			.then(res => {
 				expect(res).to.be.a('number');
 				expect(res).to.equal(935);
@@ -151,7 +151,7 @@ describe('Middleware: Tags', function() {
 	);
 
 	it(`${searchMethod}: "stars:1-2"`, ()=>
-		mongoosy.models.movies[searchMethod]('stars:1-2', {count: true})
+		mongoosy.models.movies.search('stars:1-2', {method: searchMethod, count: true})
 			.then(res => {
 				expect(res).to.be.a('number');
 				expect(res).to.equal(29);
@@ -159,7 +159,7 @@ describe('Middleware: Tags', function() {
 	);
 
 	it(`${searchMethod}: after:2000-01-01 before:2015-12-31 stars:5`, ()=>
-		mongoosy.models.movies[searchMethod]('after:2000-01-01 before:2015-12-31 stars:5', {count: true})
+		mongoosy.models.movies.search('after:2000-01-01 before:2015-12-31 stars:5', {method: searchMethod, count: true})
 			.then(res => {
 				expect(res).to.be.a('number');
 				expect(res).to.equal(733);
@@ -167,10 +167,10 @@ describe('Middleware: Tags', function() {
 	);
 
 	it(`${searchMethod}: unsupported:tag`, ()=>
-		mongoosy.models.movies[searchMethod]('unsupported:tag Miller', {count: true})
+		mongoosy.models.movies.search('unsupported:tag Miller', {method: searchMethod, count: true})
 			.then(res => {
 				expect(res).to.be.a('number');
-				expect(res).to.equal(33);
+				expect(res).to.above(33); // 33 with $text, 38 with $search
 			})
 	);
 

@@ -25,7 +25,7 @@ describe('Middleware: TextSearch', function() {
 
 	it('should generate the movies index', ()=> {
 		if (searchMethod == '$search') {
-			expect(mongoosy.models.movies.textSearchIndex({method: searchMethod})).to.deep.equal({
+			expect(mongoosy.models.movies.searchIndex({method: searchMethod})).to.deep.equal({
 				createSearchIndexes: 'movies',
 				indexes: [{
 					name: 'searchIndex',
@@ -53,7 +53,7 @@ describe('Middleware: TextSearch', function() {
 				}],
 			});
 		} else {
-			expect(mongoosy.models.movies.textSearchIndex({method: searchMethod})).to.deep.equal([
+			expect(mongoosy.models.movies.searchIndex({method: searchMethod})).to.deep.equal([
 				{
 					'info.directors': 'text',
 					title: 'text',
@@ -72,7 +72,7 @@ describe('Middleware: TextSearch', function() {
 	});
 
 	it('simple string search', ()=>
-		mongoosy.models.movies.textSearch('luhrmann')
+		mongoosy.models.movies.search('luhrmann')
 			.then(res => {
 				expect(res).to.be.an('array');
 				expect(res).to.have.length(5);
@@ -85,7 +85,7 @@ describe('Middleware: TextSearch', function() {
 	);
 
 	it('simple search result counting', ()=>
-		mongoosy.models.movies.textSearch('luhrmann', {count: true})
+		mongoosy.models.movies.search('luhrmann', {count: true})
 			.then(res => {
 				expect(res).to.be.a('number');
 				expect(res).to.equal(5);
@@ -93,7 +93,7 @@ describe('Middleware: TextSearch', function() {
 	);
 
 	it('query + additional filters', ()=>
-		mongoosy.models.movies.textSearch('luhrmann', {
+		mongoosy.models.movies.search('luhrmann', {
 			match: {year: 2013},
 		})
 			.then(res => {

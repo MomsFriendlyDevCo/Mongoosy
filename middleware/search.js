@@ -66,7 +66,7 @@ module.exports = function MongoosyTextIndex(model, options) {
 
 	if (settings.createIndex && settings.method == '$text') {
 		// Create $text index {{{
-		model.schema.index(...model.textSearchIndex());
+		model.schema.index(...model.searchIndex());
 
 		// Sync indexes from schema to models
 		// Model.$indexBuilding is a waitable promise
@@ -74,7 +74,7 @@ module.exports = function MongoosyTextIndex(model, options) {
 		// }}}
 	} else if (settings.createIndex && settings.method == '$search') {
 		// Create $search index {{{
-		let cmd = model.textSearchIndex();
+		let cmd = model.searchIndex();
 		console.warn('Run DB command', inspect(cmd, {depth: 9, colors: true}));
 		console.warn('FIXME: Skip index build');
 		/*
@@ -100,7 +100,7 @@ module.exports = function MongoosyTextIndex(model, options) {
 	*
 	* @returns {*} The specification of the selected index
 	*/
-	model.textSearchIndex = function mongooseTextSearchIndex(options) {
+	model.searchIndex = function mongooseSearchIndex(options) {
 		var indexSettings = {
 			..._.cloneDeep(settings),
 			...options,
@@ -176,7 +176,7 @@ module.exports = function MongoosyTextIndex(model, options) {
 	};
 	// }}}
 
-	// MODEL.textSearch(text, opts) {{{
+	// MODEL.search(text, opts) {{{
 	/**
 	* Fuzzy text index search using the declared search fields
 	* @param {String} terms Search terms to filter
@@ -192,7 +192,7 @@ module.exports = function MongoosyTextIndex(model, options) {
 	* @param {Array<String>} [options.searchPaths] Paths to search in the search index, auto-computed as a wildcard if omitted. method=$search only
 	* @returns {Mongoose.Aggregate} Mongoose aggregation instance (NOTE: Eventual contents will be POJOs if treated as a thenable, not a MongooseDocument)
 	*/
-	model.textSearch = function mongooseTextSearch(terms, options) {
+	model.search = function mongooseSearch(terms, options) {
 		var searchSettings = {
 			match: false,
 			skip: false,
@@ -222,7 +222,7 @@ module.exports = function MongoosyTextIndex(model, options) {
 			)
 			.then(({fuzzy, tags, aggregation})=> {
 				searchSettings.log(
-					`Performing ${!searchSettings.count ? 'textSearch' : 'textSearch+count'} on`,
+					`Performing ${!searchSettings.count ? 'search' : 'search+count'} on`,
 					'collection=', model.collectionName,
 					'fuzzy=', fuzzy ? `"${fuzzy}"` : '[none]',
 					'tags=', searchSettings.tags
