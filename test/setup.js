@@ -19,6 +19,7 @@ before('setup schemas', ()=> {
 		.schema('users', {
 			company: {type: 'pointer', ref: 'companies', index: true},
 			name: String,
+			email: {type: 'string', index: {unique: true}},
 			status: {type: 'string', enum: ['active', 'unverified', 'deleted'], default: 'unverified', index: true},
 			role: {type: String, enum: ['user', 'admin'], default: 'user', index: true},
 			_password: String,

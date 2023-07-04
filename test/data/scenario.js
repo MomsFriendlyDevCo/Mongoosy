@@ -4,6 +4,7 @@ module.exports = {
 		{
 			$: '$users.joe',
 			name: 'Joe Random',
+			email: 'joe@company.com',
 			status: 'active',
 			company: '$company.acme',
 			role: 'user',
@@ -16,6 +17,7 @@ module.exports = {
 		{
 			$: '$users.jane',
 			name: 'Jane Quark',
+			email: 'jane@company.com',
 			status: 'active',
 			company: '$company.acme',
 			role: 'user',
@@ -28,6 +30,7 @@ module.exports = {
 		{
 			$: '$users.bob',
 			name: 'Bob Bobart',
+			email: 'bob@company.com',
 			status: 'unverified',
 			company: '$company.acme',
 			role: 'user',
@@ -40,6 +43,7 @@ module.exports = {
 		{
 			$: '$users.dick',
 			name: 'Dick deleteed',
+			email: 'dick@company.com',
 			status: 'deleted',
 			company: '$company.aperture',
 			role: 'user',
@@ -52,6 +56,7 @@ module.exports = {
 		{
 			$: '$users.vallery',
 			name: 'Vallery Unverrifed',
+			email: 'vallery@company.com',
 			status: 'unverified',
 			company: '$company.aperture',
 			role: 'user',
@@ -64,6 +69,7 @@ module.exports = {
 		{
 			$: '$users.don',
 			name: 'Don Delete',
+			email: 'don@company.com',
 			status: 'deleted',
 			company: '$company.acme',
 			role: 'user',
@@ -76,6 +82,7 @@ module.exports = {
 		{
 			$: '$users.adam',
 			name: 'Adam Admin',
+			email: 'adam@company.com',
 			status: 'active',
 			company: '$company.acme',
 			role: 'admin',

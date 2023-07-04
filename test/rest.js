@@ -37,6 +37,13 @@ describe('mongoosy.Rest', function() {
 		app.use('/api/users/:id?', mongoosy.models.users.serve({
 			get: true,
 			query: true,
+			docFinder({id, model}) { // Example where the ID could be the _id field OR the email address of the user
+				if (/@/.test(id)) { // Looks like an email address
+					return model.findOne({email: id});
+				} else {
+					return model.findById(id);
+				}
+			},
 			errorHandler(res, code, text) {
 				console.warn('Error code', code, 'thrown by server:', text);
 				res.status(code).send(text);
@@ -96,6 +103,15 @@ describe('mongoosy.Rest', function() {
 				expect(res.data).to.be.an('object');
 				expect(res.data).to.have.property('_id');
 				expect(res.data).to.have.property('title', 'mongoosy: Electric Boogaloo');
+			})
+	);
+
+	it('should fetch users by email addresses (via docFinder / multi-ids)', ()=>
+		axios.get(`${url}/api/users/vallery@company.com`)
+			.then(res => {
+				expect(res.data).to.be.an('object');
+				expect(res.data).to.have.property('_id');
+				expect(res.data).to.have.property('name', 'Vallery Unverrifed');
 			})
 	);
 	// }}}
