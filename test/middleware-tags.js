@@ -1,7 +1,7 @@
 var expect = require('chai').expect;
 var moment = require('moment');
 var mongoosy = require('..');
-var searchMiddleware = require('../middleware/textIndex');
+var searchMiddleware = require('../middleware/search');
 var tagsMiddleware = require('../middleware/tags');
 const momentParseFormats = ['YYYY-MM-DD', 'D/M/YYYY', 'D/M/YYYY', 'D/M/YY', 'D/M']; // Array of formats to pass to moment(value, FORMATS) to parse dates
 

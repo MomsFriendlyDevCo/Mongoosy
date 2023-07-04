@@ -4,11 +4,11 @@ const stringSplit = require('string-split-by');
 const {inspect} = require('node:util');
 
 /**
-* Add [MODEL|QUERY].textIndex() via middleware to create + search text index fields
+* Add [MODEL|QUERY].search() via middleware to create + search text index fields
 * @param {Object} [options] Additional options to mutate behaviour
 * @param {String} [options.method='$text'] Method to use when indexing / searching. ENUM: '$text', '$search'
-* @param {String} [options.textIndexPath="_textIndex"] The path within the MongooseDocument to save the computed text-index data
-* @param {String} [options.searchIndexPath="_searchIndex"] The path within the MongooseDocument to save the computed search index data
+* @param {String} [options.searchIndexPath="_searchIndex"] The path within the MongooseDocument to save the computed data
+* @param {String} [options.searchIndexName="searchIndex"] The path within the MongooseDocument to save the computed search index data
 * @param {Boolean} [options.createIndex=true] Attempt to create the text / search index
 * @param {Function} [options.cleanTerms] Function to clean up tokens prior to indexing, defaults to applying uppercase + debug + replacing awkward characters (but preserving email addresses). Called as `(terms:Array<String>)`
 * @param {Boolean|String} [options.tags='auto'] Use the tag parsing middleware prior to searching if it is available. Set to `'auto'` to use if the tags middleware is available
@@ -22,7 +22,7 @@ const {inspect} = require('node:util');
 * @param {String} [options.fields.type='string'] Data type to store with simple index paths (see https://www.mongodb.com/docs/atlas/atlas-search/define-field-mappings/#data-types ). method=$search only
 *
 * @example Index a user lastname + age
-* MODEL.use(mongoosyTextIndex, {
+* MODEL.use(mongoosyMiddlewareSearch, {
 *   fields: [
 *     {path: 'lastname', weight: 10},
 *     {name: 'age', weight: 20, handler: doc => doc.getUserAge()},
@@ -32,8 +32,8 @@ const {inspect} = require('node:util');
 module.exports = function MongoosyTextIndex(model, options) {
 	var settings = {
 		method: '$search', // FIXME: Should be $text
-		textIndexPath: '_textIndex',
-		searchIndexPath: 'searchIndex', // Index name may only contain letters, numbers, hyphens, or underscores
+		searchIndexPath: '_search',
+		searchIndexName: 'searchIndex', // Index name may only contain letters, numbers, hyphens, or underscores
 		createIndex: false, // FIXME: should be true
 		fields: [],
 		cleanTerms: v => _.chain(v)
@@ -120,7 +120,7 @@ module.exports = function MongoosyTextIndex(model, options) {
 						.map(f => [f.path, 'text'])
 				),
 				{
-					name: settings.textIndexPath,
+					name: settings.searchIndexPath,
 					weights: Object.fromEntries(
 						settings.fields
 							.filter(f => {
@@ -135,7 +135,7 @@ module.exports = function MongoosyTextIndex(model, options) {
 			let cmd = {
 				createSearchIndexes: model.collectionName,
 				indexes: [{
-					name: indexSettings.searchIndexPath,
+					name: indexSettings.searchIndexName,
 					definition: {
 						mappings: {
 							dynamic: false,
@@ -256,7 +256,7 @@ module.exports = function MongoosyTextIndex(model, options) {
 						}});
 					} else if (searchSettings.method == '$search') {
 						agg.push({$search: {
-							index: searchSettings.searchIndexPath,
+							index: searchSettings.searchIndexName,
 							text: {
 								query: fuzzy,
 								path: searchSettings.searchPaths,
