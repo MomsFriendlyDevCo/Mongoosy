@@ -64,6 +64,7 @@ module.exports = function MongoosyTextIndex(model, options) {
 
 	// }}}
 
+	// Generate index (if settings.createIndex) {{{
 	if (settings.createIndex && settings.method == '$text') {
 		// Create $text index {{{
 		model.schema.index(...model.searchIndex());
@@ -90,14 +91,22 @@ module.exports = function MongoosyTextIndex(model, options) {
 		*/
 		// }}}
 	}
+	// }}}
 
-	// MODEL.testSearchIndex(opts) {{{
+	// Add Meta search field to schema {{{
+	model.schema.add({
+		[settings.searchIndexPath]: {type: Object},
+	});
+	// }}}
+
+	// MODEL.searchIndex(opts) {{{
 	/**
 	* Generate the syntax to create the text / search indexes against the mode
 	* This is automatically called if `{createIndex: true}` when attaching the main middleware
 	*
 	* If trying to create a $text index this returns the index spec that should be passed to MODEL.createIndex(), if using $search this needs to be run via db.runCommand
 	*
+	* @param {Object} [options] Additional options to mutate behaviour, inherits from the model settings otherwise
 	* @returns {*} The specification of the selected index
 	*/
 	model.searchIndex = function mongooseSearchIndex(options) {
@@ -145,16 +154,29 @@ module.exports = function MongoosyTextIndex(model, options) {
 
 			// Break dotted notation paths into nested document search indexes
 			let rootPath = ['indexes', 0, 'definition', 'mappings', 'fields'];
-			indexSettings.fields
-				.filter(f => {
-					if (f.path) return true;
-					console.warn('Ignoring unsupported text-index field type', f);
+			_.chain(indexSettings.fields)
+				.thru(fields => {
+					if (fields.some(f => f.handler)) { // We have some dynamic fields - include the meta field as a string component
+						fields.push({
+							path: indexSettings.searchIndexPath,
+							weight: _(fields)
+								.filter(f => f.hanlder && f.weight)
+								.max(),
+							type: 'document',
+							dynamic: true, // So the keys get indexed
+						});
+					}
+					return fields;
 				})
+				.filter(f => f.path) // Simple fields to index only
 				.forEach(f => {
 					let pathSegments = f.path.split('.');
 
 					if (pathSegments.length == 1) { // Top level path
 						_.set(cmd, [...rootPath, ...pathSegments, 'type'], f.type || 'string');
+
+						if (f.dynamic !== undefined)
+							_.set(cmd, [...rootPath, ...pathSegments, 'dynamic'], f.dynamic);
 					} else { // Nested path {
 						let parentPath = [
 							...rootPath,
@@ -169,7 +191,8 @@ module.exports = function MongoosyTextIndex(model, options) {
 
 						_.set(cmd, [...nodePath, 'type'], f.type || 'string');
 					}
-				});
+				})
+				.value()
 
 			return cmd;
 		}
@@ -180,7 +203,7 @@ module.exports = function MongoosyTextIndex(model, options) {
 	/**
 	* Fuzzy text index search using the declared search fields
 	* @param {String} terms Search terms to filter
-	* @param {Object} [options] Additional options
+	* @param {Object} [options] Additional options to mutate behaviour, inherits from the model settings otherwise
 	* @param {Object} [options.match] Additional $match fields to filter by
 	* @param {Number} [options.skip] Number of records to skip
 	* @param {Number} [options.limit] Number of records to limit by
@@ -327,6 +350,89 @@ module.exports = function MongoosyTextIndex(model, options) {
 					)
 			})
 			// }}}
+	};
+	// }}}
+
+	// MODEL.searchReindex(opts) {{{
+	/**
+	* Recompute the meta index field on all matching documents
+	* This function is mainly used if the index definition changes
+	*
+	* @param {Object} [options] Additional options to mutate behaviour, inherits from the model settings otherwise
+	* @param {Object} [options.match] Additional $match fields to filter by
+	* @param {Number} [options.parallel=20] Number of threads to run at once
+	* @param {Function} [options.logProgress] Function to show reindex progress. Called as ({current:Number, total:Numer}). Defaults to a throttled console.warn).
+	*
+	* @returns {Promise} A promise which resolves when the operation has completed
+	*/
+	model.searchReindex = function mongooseSearchReindex(options) {
+		let reindexSettings = {
+			match: {},
+			parallel: 20,
+			logProgress: _.throttle(stats => {
+				console.warn('Reindex', model.collectionName, 'docs @', stats.current, '/', stats.total, '~', `${Math.round(stats.current / stats.total * 100)}%`)
+			}, 1000),
+			..._.cloneDeep(settings),
+			...options,
+		};
+
+		let stats = {
+			current: 0,
+			total: -1,
+		};
+
+		return model.countDocuments(reindexSettings.match)
+			.then(res => stats.total = res)
+			.then(()=> model.find(reindexSettings.match)
+				.cursor()
+				.eachAsync(doc =>
+					model.searchReindexDoc(doc)
+						.then(()=> doc.save())
+						.then(()=> {
+							stats.current++;
+							return reindexSettings.logProgress(stats);
+						})
+				, {parallel: reindexSettings.paralell})
+			)
+	};
+	// }}}
+
+	// MODEL.searchReindexDoc(doc, opts) {{{
+	/**
+	* Compute and apply the new search index for an active document
+	* Ideally this function is called automatically in a pre-save hook
+	* Note that the document IS NOT saved when the field has been set
+	*
+	* @param {MongooseDocument} doc The target document to update
+	* @param {Object} [options] Additional options to mutate behaviour, inherits from the model settings otherwise
+	* @param {Boolean} [options.apply=true] Set the field as well as computing it, if disabled the promise will respond with the value that would be set
+	*
+	* @returns {Promise<MongooseDocument|Object>} Either the modified document OR (if `apply=false`) the value that would be set
+	*/
+	model.searchReindexDoc = function mongooseSearchReindexDoc(doc, options) {
+		let reindexDocSettings = {
+			apply: true,
+			..._.cloneDeep(settings),
+			...options,
+		};
+
+		return Promise.all(
+			reindexDocSettings.fields
+				.filter(f => f.handler)
+				.map(f => Promise.resolve(f.handler(doc))
+					.then(result => [f.name, result])
+				)
+		)
+			.then(dynamicFields => dynamicFields.filter(([, val]) => val))
+			.then(dynamicFields => Object.fromEntries(dynamicFields))
+			.then(dynamicFields => {
+				if (reindexDocSettings.apply) {
+					doc.$set(reindexDocSettings.searchIndexPath, dynamicFields);
+					return doc;
+				} else {
+					return dynamicFields;
+				}
+			})
 	};
 	// }}}
 }

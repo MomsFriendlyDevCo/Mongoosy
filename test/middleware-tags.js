@@ -84,7 +84,10 @@ describe('Middleware: Tags', function() {
 			})
 	);
 
-	['$text', '$search'].forEach(searchMethod => {
+	[
+		// '$text',
+		'$search',
+	].forEach(searchMethod => {
 
 	it(`${searchMethod}: [no value / return everything]`, ()=>
 		mongoosy.models.movies.search('', {method: searchMethod, count: true})

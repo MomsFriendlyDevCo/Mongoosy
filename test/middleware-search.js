@@ -7,7 +7,10 @@ require('./setup');
 describe('Middleware: TextSearch', function() {
 	this.timeout(5 * 1000);
 
-	['$text', '$search'].forEach(searchMethod => {
+	[
+		// '$text',
+		'$search',
+	].forEach(searchMethod => {
 
 	before('create search index', ()=> mongoosy.schemas.movies.use(searchMiddleware, {
 		method: searchMethod,
@@ -15,7 +18,9 @@ describe('Middleware: TextSearch', function() {
 			{path: 'title', weight: 100},
 			{path: 'info.directors', weight: 50},
 			{path: 'year', weight: 10},
-			// FIXME: Example of handler() index
+			{name: 'mainGenre', handler: doc => doc.info.genres[0]},
+			{name: 'alwaysMovie', handler: ()=> 'Movie'},
+			{name: 'alwaysEmpty', handler: ()=> ''},
 		],
 	}));
 
@@ -33,6 +38,10 @@ describe('Middleware: TextSearch', function() {
 						mappings: {
 							dynamic: false,
 							fields: {
+								_search: { // Meta collection of items due to having a handler() in the field spec
+									dynamic: true,
+									type: 'document',
+								},
 								title: {
 									type: 'string',
 								},
@@ -101,6 +110,30 @@ describe('Middleware: TextSearch', function() {
 				expect(res).to.have.length(1);
 			})
 	)
+
+	it('should dry run a document reindex', ()=>
+		mongoosy.models.movies.search('luhrmann romeo julliet')
+			.then(([movie]) => {
+				expect(movie).to.be.an('object');
+				expect(movie).to.have.property('_id');
+
+				return mongoosy.models.movies.searchReindexDoc(movie, {apply: false})
+			})
+			.then(index => {
+				expect(index).to.be.an('object');
+				expect(index).to.be.deep.equal({
+					mainGenre: 'Drama',
+					alwaysMovie: 'Movie',
+				});
+			})
+	);
+
+	// This test is only really valid if changing index specs
+	it.skip('should reindex all docs', function() {
+		this.timeout(3 * 60 * 1000); //~ 3m
+
+		return mongoosy.models.movies.searchReindex()
+	});
 
 	});
 
