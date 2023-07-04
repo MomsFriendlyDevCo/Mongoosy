@@ -21,7 +21,7 @@ class Mongoosy extends mongoose.Mongoose {
 		require('./rest')(this);
 		require('./model')(this);
 		// require('./versioning')(this);
-	};
+	}
 
 
 	/**
@@ -60,7 +60,7 @@ class Mongoosy extends mongoose.Mongoose {
 
 		debug('Connect', settings);
 		return super.connect(settings.uri, _.omit(settings, ['uri']));
-	};
+	}
 
 
 
@@ -89,7 +89,7 @@ class Mongoosy extends mongoose.Mongoose {
 			)
 		)
 		.then(()=> this.models)
-	};
+	}
 
 
 
@@ -117,7 +117,7 @@ class Mongoosy extends mongoose.Mongoose {
 		this.schemas[id].id = id;
 		this.schemas[id].mongoosy = this;
 		return this.schemas[id];
-	};
+	}
 
 
 	/**
@@ -136,7 +136,7 @@ class Mongoosy extends mongoose.Mongoose {
 				return collections[0].drop();
 			})
 			.then(()=> true);
-	};
+	}
 
 
 	/**
@@ -148,7 +148,7 @@ class Mongoosy extends mongoose.Mongoose {
 	dropDatabase(confirmation) {
 		if (!_.isEqual(confirmation, {$confirmDrop: true})) throw new Error('Refusing to drop database without exact confirmation object');
 		return this.connection.dropDatabase();
-	};
+	}
 
 
 	/**
@@ -158,7 +158,7 @@ class Mongoosy extends mongoose.Mongoose {
 	utils = {
 		promiseAllLimit: require('./promise.alllimit'),
 		promiseAllSeries: require('./promise.allseries'),
-	};
+	}
 
 }
 

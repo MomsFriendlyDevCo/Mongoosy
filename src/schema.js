@@ -45,7 +45,7 @@ module.exports = class MongoosySchema extends mongoose.Schema {
 			super.virtual(field).get(getter);
 		}
 		return this;
-	};
+	}
 
 
 	/**
@@ -59,7 +59,7 @@ module.exports = class MongoosySchema extends mongoose.Schema {
 		if (options && typeof options != 'object') throw new Error('Second param to mongoosy.schema.use() must an options object or falsy');
 		this.middleware.push({handler, options});
 		return this;
-	};
+	}
 
 
 	/**
@@ -69,7 +69,7 @@ module.exports = class MongoosySchema extends mongoose.Schema {
 	*/
 	compile() {
 		return this.mongoosy.compileModels(this.id);
-	};
+	}
 
 
 	/**
@@ -100,7 +100,7 @@ module.exports = class MongoosySchema extends mongoose.Schema {
 			super.pre(hook, options, handler);
 		}
 		return this;
-	};
+	}
 
 
 	/**
@@ -131,5 +131,5 @@ module.exports = class MongoosySchema extends mongoose.Schema {
 			super.post(hook, options, handler);
 		}
 		return this;
-	};
+	}
 }

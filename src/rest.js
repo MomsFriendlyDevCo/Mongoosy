@@ -106,7 +106,7 @@ module.exports = function MongoosyRest(mongoosy, options) {
 		var attemptParse = query => {
 			try {
 				let res = {};
-				for (k in query) {
+				for (var k in query) {
 					res[k] = JSON.parse(query[k]);
 				}
 				return res;
@@ -311,7 +311,7 @@ module.exports = function MongoosyRest(mongoosy, options) {
 							.catch(e => settings.errorHandler(res, 400, e))
 
 						default:
-							throw new Error(`Unsupported queryMethod "${queryMethod}"`);
+							throw new Error(`Unsupported queryMethod "${serverMethod}"`);
 					}
 				})
 				// }}}

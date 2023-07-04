@@ -40,7 +40,7 @@ describe('Change hooks', ()=> {
 		.then(()=> mongoosy.models.hookTests.insertOne({
 			name: 'Change:DocSave()',
 		}))
-		.then(newDoc => mongoosy.models.hookTests.findOne({name: 'Change:DocSave()'}))
+		.then(()=> mongoosy.models.hookTests.findOne({name: 'Change:DocSave()'}))
 		.then(doc => {
 			doc.iteration++;
 			return doc.save();
@@ -56,7 +56,7 @@ describe('Change hooks', ()=> {
 		.then(()=> mongoosy.models.hookTests.insertOne({
 			name: 'Change:FindOneAndUpdate()',
 		}))
-		.then(newDoc => mongoosy.models.hookTests.findOne({name: 'Change:FindOneAndUpdate()'}))
+		.then(()=> mongoosy.models.hookTests.findOne({name: 'Change:FindOneAndUpdate()'}))
 		.then(doc => {
 			doc.iteration++;
 			return doc.save();
@@ -73,7 +73,7 @@ describe('Change hooks', ()=> {
 		.then(()=> mongoosy.models.hookTests.insertOne({
 			name: 'Change:Update()',
 		}))
-		.then(newDoc => mongoosy.models.hookTests.update({name: 'Change:Update()'}, {iteration: 10}))
+		.then(()=> mongoosy.models.hookTests.update({name: 'Change:Update()'}, {iteration: 10}))
 		.then(()=> {
 			expect(hasChanged).to.equal(1);
 		})

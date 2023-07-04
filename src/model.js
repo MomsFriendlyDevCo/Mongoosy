@@ -52,7 +52,7 @@ module.exports = function(mongoosy) {
 				if (!prefix) prefix = '';
 
 				var sortedPaths = _(node)
-					.map((v,k) => v)
+					.map(v => v)
 					.sortBy('path')
 					.value();
 
@@ -120,7 +120,7 @@ module.exports = function(mongoosy) {
 			// Compute prototype {{{
 			if (settings.prototype) {
 				meta.$prototype = Object.entries(meta)
-					.filter(([key, val]) => key != '_id') // Skip ID field
+					.filter(([key]) => key != '_id') // Skip ID field
 					.reduce((proto, [key, val]) =>
 						_.set(proto, key,
 							val.default && val.default != '[DYNAMIC]' ? val.default
@@ -227,7 +227,7 @@ module.exports = function(mongoosy) {
 
 		// Debugging enabled? Strap a debugging prefix onto all doc access methods
 		if (debug.enabled || process.env.DEBUG) {
-			['count', 'create', 'deleteMany', 'deleteOne', 'findOneAndUpdate', 'insert', 'insertOne', 'insertMany', 'meta', ,'updateMany', 'updateOne', 'upsert']
+			['count', 'create', 'deleteMany', 'deleteOne', 'findOneAndUpdate', 'insert', 'insertOne', 'insertMany', 'meta' ,'updateMany', 'updateOne', 'upsert']
 				.forEach(method => {
 					var originalMethod = model[method];
 					model[method] = function(...args) {

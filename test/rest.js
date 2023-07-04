@@ -1,11 +1,9 @@
-var _ = require('lodash');
 var axios = require('axios');
 var bodyParser = require('body-parser');
 var mongoosy = require('..');
 var expect = require('chai').expect;
 var express = require('express');
 var expressLogger = require('express-log-url');
-var os = require('os');
 
 require('./setup');
 
@@ -196,7 +194,7 @@ describe('mongoosy.Rest', function() {
 
 	it('should throw when asked for hidden fields', function() {
 		axios.get(`${url}/api/users?select=_id,_password`)
-			.then(res => this.fail)
+			.then(()=> this.fail)
 			.catch(res => expect(res.response).to.have.property('status', 400))
 	});
 	// }}}

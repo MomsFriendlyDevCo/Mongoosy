@@ -23,7 +23,7 @@ module.exports = (limit, promises) => new Promise((resolve, reject) => {
 		if (!queue.promisesRemaining.length && queue.running == 0) return resolve(queue.output);
 
 		while (queue.promisesRemaining.length > 0 && queue.running < queue.limit) {
-			var promiseRunner = function(thisPromise, promiseIndex) {
+			(function(thisPromise, promiseIndex) {
 				queue.running++;
 				Promise.resolve(thisPromise())
 					.then(res => {
@@ -35,7 +35,7 @@ module.exports = (limit, promises) => new Promise((resolve, reject) => {
 						promiseChecker(queue);
 					})
 					.catch(reject);
-			}(queue.promisesRemaining.shift(), queue.promiseIndex++);
+			})(queue.promisesRemaining.shift(), queue.promiseIndex++);
 		}
 	};
 

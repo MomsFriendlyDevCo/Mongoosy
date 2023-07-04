@@ -7,7 +7,8 @@ var expect = require('chai').expect;
 var mongoosy = require('..');
 
 var settings = {
-	uri: 'mongodb://localhost/mongoosy',
+	// uri: 'mongodb://localhost/mongoosy', // Local Instance (won't work with $search)
+	uri: 'mongodb+srv://lab:gMCxzV7SRoUgVKxP@lab.1xbeqqd.mongodb.net/?retryWrites=true&w=majority', // Example Atlas instance to test $search
 };
 
 before('connect to test database', ()=> mongoosy.connect(settings.uri));
@@ -15,7 +16,7 @@ before('connect to test database', ()=> mongoosy.connect(settings.uri));
 // Setup schemas {{{
 before('setup schemas', ()=> {
 	// Users {{{
-	var Users = mongoosy
+	mongoosy
 		.schema('users', {
 			company: {type: 'pointer', ref: 'companies', index: true},
 			name: String,
@@ -51,13 +52,13 @@ before('setup schemas', ()=> {
 	// }}}
 
 	// Companies {{{
-	var Companies = mongoosy.schema('companies', {
+	mongoosy.schema('companies', {
 		name: String,
 	})
 	// }}}
 
 	// Widgets {{{
-	var Widgets = mongoosy.schema('widgets', {
+	mongoosy.schema('widgets', {
 		created: {type: Date, default: Date.now},
 		name: String,
 		content: String,

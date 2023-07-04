@@ -1,5 +1,4 @@
 var expect = require('chai').expect;
-var fs = require('fs');
 var mongoosy = require('..');
 var searchMiddleware = require('../middleware/search');
 

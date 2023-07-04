@@ -1,6 +1,4 @@
 const _ = require('lodash');
-const mongoosy = require('../src/mongoosy');
-const stringSplit = require('string-split-by');
 const {inspect} = require('node:util');
 
 /**
@@ -43,7 +41,7 @@ module.exports = function MongoosyTextIndex(model, options) {
 			.split(/\s+/)
 			.map(word =>
 				/@/.test(word) // Looks like an email?
-					? word.replace(/[^A-Z0-9\-\_\@\.]+/g, ' ') // Email tidy
+					? word.replace(/[^A-Z0-9\-_@\.]+/g, ' ') // Email tidy
 					: word.replace(/[^A-Z0-9\-:]+/g, ' ') // Standard tidy
 			)
 			.join(' ')
@@ -195,8 +193,6 @@ module.exports = function MongoosyTextIndex(model, options) {
 	* @returns {Mongoose.Aggregate} Mongoose aggregation instance (NOTE: Eventual contents will be POJOs if treated as a thenable, not a MongooseDocument)
 	*/
 	model.textSearch = function mongooseTextSearch(terms, options) {
-		var query = this;
-		var searchStart = Date.now();
 		var searchSettings = {
 			match: false,
 			skip: false,

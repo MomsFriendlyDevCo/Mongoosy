@@ -8,6 +8,7 @@
     "url": "git://github.com/MomsFriendlyDevCo/Mongoosy.git"
   },
   "scripts": {
+    "lint": "eslint .",
     "test": "mocha",
     "test:middleware": "MONGOOSY_SKIP_REBUILD=1 mocha -b test/middleware-*.js"
   },
@@ -32,12 +33,26 @@
     "string-split-by": "^1.0.0"
   },
   "devDependencies": {
+    "@momsfriendlydevco/eslint-config": "^1.0.4",
     "axios": "^0.21.1",
     "body-parser": "^1.19.0",
     "chai": "^4.3.4",
+    "eslint": "^8.44.0",
     "express": "^4.17.1",
     "express-log-url": "^1.5.1",
     "mocha": "^8.3.2",
     "moment": "^2.29.4"
+  },
+  "eslintConfig": {
+    "extends": "@momsfriendlydevco",
+    "env": {
+      "es6": true,
+      "node": true,
+      "mocha": true
+    },
+    "parserOptions": {
+      "ecmaVersion": 13,
+      "sourceType": "module"
+    }
   }
 }
