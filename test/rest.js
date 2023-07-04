@@ -34,7 +34,14 @@ describe('mongoosy.Rest', function() {
 				res.status(code).send(text);
 			},
 		}));
-		app.use('/api/users/:id?', mongoosy.models.users.serve());
+		app.use('/api/users/:id?', mongoosy.models.users.serve({
+			get: true,
+			query: true,
+			errorHandler(res, code, text) {
+				console.warn('Error code', code, 'thrown by server:', text);
+				res.status(code).send(text);
+			},
+		}));
 		server = app.listen(port, null, finish);
 	});
 	after(()=> server && server.close());
@@ -163,6 +170,7 @@ describe('mongoosy.Rest', function() {
 			.then(res => {
 				expect(res.data).to.be.an('array');
 				res.data.forEach(user => {
+					expect(user).to.be.an('object');
 					expect(user).to.have.property('_id');
 					expect(user).to.have.property('__v');
 					expect(user).to.not.have.property('_password');
@@ -194,6 +202,7 @@ describe('mongoosy.Rest', function() {
 					'info.rank': {type: 'number'},
 					'info.running_time_secs': {type: 'number'},
 					'info.actors': {type: 'array', default: '[DYNAMIC]'},
+					'info.rating': {type: 'number'},
 				});
 			})
 	);

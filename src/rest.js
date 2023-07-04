@@ -27,6 +27,10 @@ module.exports = function MongoosyRest(mongoosy, options) {
 		search: true, // Only works if model.search() is present
 		searchCount: true, // ^^^
 		searchId: '_id',
+		docFinder: ({id, model}) => {
+			console.log('DocFinder', id);
+			return model.findById(id)
+		},
 		errorHandler: (res, code, text) => res.status(code).send(text),
 		selectHidden: false,
 		forbidHidden: true,
@@ -62,8 +66,9 @@ module.exports = function MongoosyRest(mongoosy, options) {
 	* @param {array<string>} [options.metaCustomFields] Additional fields to expose in meta
 	* @param {string} [options.metaParam="meta"] Special case URL suffix to identify that we are performating a meta operation and not looking up an ID
 	* @param {boolean|array <function>|function} [options.search=false] Enable searching of records or specify middleware(s) to execute beforehand
-	* @param {string} [options.searchId="_id"] What field to search by when fetching / updating / deleting documents
-	* @param {function <Promise>|function} [options.searchMap] Function to use post-search-query to mangle outgoing documents (overrides `selectHidden`). Called as `(MongooseDocument, req)`
+	* @param {string} [options.searchId="_id"] What field to search by when fetching / updating / deleting documents.
+	* @param {function} {function} [options.docFinder] SYNC function to find the matching doc from the provided id (extracted via `searchParam`). Called as `({req, id, model, settings, serverMethod})` and expected to return the matching MongoosyDocument. Defaults to `({id, model}) => model.findByID(id)`. This has to be sync to get the docuemnt without forcing the promise to resolve
+	* @param {function {Promise|function} [options.searchMap] Function to use post-search-query to mangle outgoing documents (overrides `selectHidden`). Called as `(MongooseDocument, req)`
 	* @param {string} [options.searchParam="q"] Special case URL querystring to identify that we are performating a search operation and not looking up an ID
 	* @param {string} [options.param="id"] Where to look in req.params for the document ID to get/update/delete
 	* @param {boolean} [selectHidden=false] Automatically surpress all output fields prefixed with '_'
@@ -204,9 +209,20 @@ module.exports = function MongoosyRest(mongoosy, options) {
 				// }}}
 				// Execute function and return (main query handler - GET, POST etc.) {{{
 				.then(()=> {
+					var targetDoc = ['get', 'delete', 'save'].includes(serverMethod) // Start Mongoose chain to fetch the target (but don't resolve the promise as we want the MongoosyDocument not the resolution)
+						&& settings.docFinder({
+							req,
+							id: req.params[settings.param],
+							model,
+							settings,
+							serverMethod,
+						});
+
 					if (debug.enabled) debug('Perform ReST', {
 						serverMethod,
-						[settings.searchId]: req.params[settings.param],
+						...(targetDoc?._id && {
+							targetDoc: targetDoc._id,
+						}),
 						query: req.query,
 						attemptParse: attemptParse(removeMetaParams(req.query)),
 						removeMetaParams: removeMetaParams(req.query),
@@ -236,9 +252,7 @@ module.exports = function MongoosyRest(mongoosy, options) {
 						case 'meta': return Promise.resolve(model.meta({custom: settings.metaCustomFields}))
 							.catch(()=> res.sendStatus(400));
 
-						case 'get': return model.findOne({
-								[settings.searchId]: req.params[settings.param],
-							})
+						case 'get': return targetDoc
 							.select(req.query.select ? req.query.select.split(/[\s\,]+/).join(' ') : undefined)
 							.then(doc => {
 								if (doc) return docMap(doc, req);
@@ -269,8 +283,8 @@ module.exports = function MongoosyRest(mongoosy, options) {
 							.then(count => ({count}))
 							.catch(e => settings.errorHandler(res, 400, e))
 
-						case 'save': return model.findById(req.params[settings.param])
-							.then(doc => { // Mutate existing document while dirtying top-level keys.
+						case 'save': return Promise.resolve(targetDoc)
+							.then(doc => { // Mutate existing document while dirtying top-level keys so change detection kicks-in
 								delete req.body.__v;
 								for (var k in req.body) {
 									_.set(doc, k, req.body[k]);
@@ -291,9 +305,8 @@ module.exports = function MongoosyRest(mongoosy, options) {
 							.catch(e => settings.errorHandler(res, 400, e))
 
 						// FIXME: Like Model.remove(), this function does not trigger pre('remove') or post('remove') hooks.
-						case 'delete': return model.deleteOne({
-								[settings.searchId]: req.params[settings.param],
-							})
+						case 'delete': return Promise.resolve(targetDoc.select('_id'))
+							.then(doc => model.deleteOne({_id: doc._id}))
 							.then(()=> undefined)
 							.catch(e => settings.errorHandler(res, 400, e))
 

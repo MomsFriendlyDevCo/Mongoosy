@@ -45,7 +45,7 @@ before('setup schemas', ()=> {
 					.replace(/[^aeiou]+/g, '');
 			}
 		)
-		.virtual('passwordStrength', doc => doc._password ? doc._password.length : 0) // Returns the length of the (badly, see above) hashed password which is an approximate indicator of hash strength
+		.virtual('passwordStrength', doc => doc?._password ? doc._password.length : 0) // Returns the length of the (badly, see above) hashed password which is an approximate indicator of hash strength
 		.method('greet', doc => `${doc.settings.greeting} ${doc.name}`)
 	// }}}
 
