@@ -7,7 +7,7 @@ require('./setup');
 describe('Middleware: TextSearch', function() {
 	this.timeout(5 * 1000);
 
-	['$search'].forEach(searchMethod => {
+	['$text', '$search'].forEach(searchMethod => {
 
 	before('create search index', ()=> mongoosy.schemas.movies.use(searchMiddleware, {
 		method: searchMethod,
@@ -23,34 +23,52 @@ describe('Middleware: TextSearch', function() {
 
 	before('wait for reindexing', ()=> mongoosy.models.movies.$indexBuilding);
 
-	it('should generate the movies search index', ()=> {
-		expect(mongoosy.models.movies.textSearchIndex()).to.deep.equal({
-			createSearchIndexes: 'movies',
-			indexes: [{
-				name: 'searchIndex',
-				definition: {
-					mappings: {
-						dynamic: false,
-						fields: {
-							title: {
-								type: 'string',
-							},
-							info: {
-								type: 'document',
-								fields: {
-									directors: {
-										type: 'string',
+	it('should generate the movies index', ()=> {
+		if (searchMethod == '$search') {
+			expect(mongoosy.models.movies.textSearchIndex({method: searchMethod})).to.deep.equal({
+				createSearchIndexes: 'movies',
+				indexes: [{
+					name: 'searchIndex',
+					definition: {
+						mappings: {
+							dynamic: false,
+							fields: {
+								title: {
+									type: 'string',
+								},
+								info: {
+									type: 'document',
+									fields: {
+										directors: {
+											type: 'string',
+										},
 									},
 								},
-							},
-							year: {
-								type: 'string',
+								year: {
+									type: 'string',
+								},
 							},
 						},
 					},
+				}],
+			});
+		} else {
+			expect(mongoosy.models.movies.textSearchIndex({method: searchMethod})).to.deep.equal([
+				{
+					'info.directors': 'text',
+					title: 'text',
+					year: 'text',
 				},
-			}],
-		});
+				{
+					name: '_search',
+					weights: {
+						'info.directors': 50,
+						title: 100,
+						year: 10,
+					},
+				},
+			]);
+		}
 	});
 
 	it('simple string search', ()=>
