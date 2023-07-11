@@ -64,35 +64,6 @@ module.exports = function MongoosyTextIndex(model, options) {
 
 	// }}}
 
-	// Generate index (if settings.createIndex) {{{
-	if (settings.createIndex && settings.method == '$text') {
-		// Create $text index {{{
-		model.schema.index(...model.searchIndex());
-
-		// Sync indexes from schema to models
-		// Model.$indexBuilding is a waitable promise
-		model.$indexBuilding = model.createIndexes();
-		// }}}
-	} else if (settings.createIndex && settings.method == '$search') {
-		// Create $search index {{{
-		let cmd = model.searchIndex();
-		console.warn('Run DB command', inspect(cmd, {depth: 9, colors: true}));
-		console.warn('FIXME: Skip index build');
-		/*
-		model.$indexBuilding = mongoosy.connection.db.command(cmd)
-			.catch(e => {
-				if (/no such command: 'createSearchIndexes'/.test(e.toString())) {
-					throw new Error(`Cannot create $search index - are you sure this is a Mongo Atlas endpoint? - ${e.toString()}`);
-				} else {
-					console.warn('Error while trying to run createSearchIndexes');
-					throw e;
-				}
-			})
-		*/
-		// }}}
-	}
-	// }}}
-
 	// Add Meta search field to schema {{{
 	model.schema.add({
 		[settings.searchIndexPath]: {type: Object},
@@ -434,5 +405,34 @@ module.exports = function MongoosyTextIndex(model, options) {
 				}
 			})
 	};
+	// }}}
+
+	// Generate index (if settings.createIndex) {{{
+	if (settings.createIndex && settings.method == '$text') {
+		// Create $text index {{{
+		model.schema.index(...model.searchIndex());
+
+		// Sync indexes from schema to models
+		// Model.$indexBuilding is a waitable promise
+		model.$indexBuilding = model.createIndexes();
+		// }}}
+	} else if (settings.createIndex && settings.method == '$search') {
+		// Create $search index {{{
+		let cmd = model.searchIndex();
+		console.warn('Run DB command', inspect(cmd, {depth: 9, colors: true}));
+		console.warn('FIXME: Skip index build');
+		/*
+		model.$indexBuilding = mongoosy.connection.db.command(cmd)
+			.catch(e => {
+				if (/no such command: 'createSearchIndexes'/.test(e.toString())) {
+					throw new Error(`Cannot create $search index - are you sure this is a Mongo Atlas endpoint? - ${e.toString()}`);
+				} else {
+					console.warn('Error while trying to run createSearchIndexes');
+					throw e;
+				}
+			})
+		*/
+		// }}}
+	}
 	// }}}
 }
