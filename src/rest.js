@@ -241,7 +241,10 @@ module.exports = function MongoosyRest(mongoosy, options) {
 						: serverMethod == 'query' && settings.queryMap ? settings.queryMap
 						: doc => { // Default behaviour - hide all `_` prefixed fields if settings.selectHidden is enabled
 							if (settings.selectHidden) return doc.toObject({ virtuals: true }); // No rewrite needed
-							return _.pickBy(doc.toObject({ virtuals: true }), (v, k) => settings.neverHidden.includes(k) || !k.startsWith('_'));
+							return _(doc)
+								.thru(doc => doc.toObject ? doc.toObject({ virtuals: true }) : doc) // Flatten to basic POJO if we have that function
+								.pickBy((v, k) => settings.neverHidden.includes(k) || !k.startsWith('_'))
+								.value()
 						};
 
 					switch (serverMethod) {
