@@ -31,7 +31,7 @@ module.exports = function MongoosyRest(mongoosy, options) {
 			console.log('DocFinder', id);
 			return model.findById(id)
 		},
-		errorHandler: (res, code, text) => res.status(code).send(text),
+		errorHandler: (res, code, text) => res.status(code).send(text.toString()),
 		selectHidden: false,
 		forbidHidden: true,
 		neverHidden: ['_id', '__v'],
