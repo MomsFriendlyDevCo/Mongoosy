@@ -29,10 +29,10 @@ const {inspect} = require('node:util');
 */
 module.exports = function MongoosyTextIndex(model, options) {
 	var settings = {
-		method: '$search', // FIXME: Should be $text
+		method: '$text',
 		searchIndexPath: '_search',
 		searchIndexName: 'searchIndex', // Index name may only contain letters, numbers, hyphens, or underscores
-		createIndex: false, // FIXME: should be true
+		createIndex: true,
 		fields: [],
 		cleanTerms: v => _.chain(v)
 			.toString()
