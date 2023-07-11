@@ -176,8 +176,9 @@ module.exports = function MongoosyTextIndex(model, options) {
 	* @param {String} terms Search terms to filter
 	* @param {Object} [options] Additional options to mutate behaviour, inherits from the model settings otherwise
 	* @param {Object} [options.match] Additional $match fields to filter by
-	* @param {Number} [options.skip] Number of records to skip
-	* @param {Number} [options.limit] Number of records to limit by
+	* @param {String|Array<String>} [options.select] Specific fields to select either as a CSV or array of strings
+	* @param {Number|String} [options.skip] Number of records to skip
+	* @param {Number|String} [options.limit] Number of records to limit by
 	* @param {String} [options.scoreField="_score"] Append the search score as this field, set to falsy to disable.
 	* @param {Boolean} [options.sortByScore=true] Sort results by the score, descending
 	* @param {Boolean} [options.count=false] Return only the count of matching documents, optimizing various parts of the search functionality
@@ -189,6 +190,7 @@ module.exports = function MongoosyTextIndex(model, options) {
 	model.search = function mongooseSearch(terms, options) {
 		var searchSettings = {
 			match: false,
+			select: null,
 			skip: false,
 			limit: false,
 			count: false,
@@ -293,14 +295,34 @@ module.exports = function MongoosyTextIndex(model, options) {
 					}});
 				// }}}
 
+				// $project - Select specific fields (if searchSettings.select) {{{
+				if (
+					searchSettings.select
+					&& (
+						typeof searchSettings.select == 'string'
+						|| Array.isArray(searchSettings.select) && searchSettings.select.length > 0
+					)
+				)
+					agg.push({$project: _(searchSettings.select)
+						.thru(v => typeof v == 'string' ? v.split(/\s*,\s*/) : v)
+						.map(v => [v, 1])
+						.fromPairs()
+						.value()
+					});
+				// }}}
+
 				// $skip (if searchSettings.skip) {{{
 				if (searchSettings.skip)
-					agg.push({$skip: searchSettings.skip});
+					agg.push({$skip:
+						typeof searchSettings.skip == 'number' ? searchSettings.skip : parseInt(searchSettings.skip)
+					});
 				// }}}
 
 				// $limit (if searchSettings.limit) {{{
 				if (searchSettings.limit)
-					agg.push({$limit: searchSettings.limit});
+					agg.push({$limit:
+						typeof searchSettings.limit == 'number' ? searchSettings.limit : parseInt(searchSettings.limit)
+					});
 				// }}}
 
 				// $count (if searchSettings.count) {{{
