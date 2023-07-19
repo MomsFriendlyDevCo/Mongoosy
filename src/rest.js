@@ -27,10 +27,7 @@ module.exports = function MongoosyRest(mongoosy, options) {
 		search: true, // Only works if model.search() is present
 		searchCount: true, // ^^^
 		searchId: '_id',
-		docFinder: ({id, model}) => {
-			console.log('DocFinder', id);
-			return model.findById(id)
-		},
+		docFinder: ({id, model}) => model.findById(id),
 		errorHandler: (res, code, text) => res.status(code).send(text.toString()),
 		selectHidden: false,
 		forbidHidden: true,
@@ -105,7 +102,7 @@ module.exports = function MongoosyRest(mongoosy, options) {
 		var removeMetaParams = query => _.omit(query, ['limit', 'select', 'skip', 'sort']);
 		var attemptParse = query => {
 			let res = {};
-			for (k in query) {
+			for (let k in query) {
 				try {
 					res[k] = JSON.parse(query[k]);
 				} catch(e) {
