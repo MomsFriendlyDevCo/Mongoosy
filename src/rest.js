@@ -68,7 +68,7 @@ module.exports = function MongoosyRest(mongoosy, options) {
 	* @param {boolean|array <function>|function} [options.search=false] Enable searching of records or specify middleware(s) to execute beforehand
 	* @param {string} [options.searchId="_id"] What field to search by when fetching / updating / deleting documents.
 	* @param {function} {function} [options.docFinder] SYNC function to find the matching doc from the provided id (extracted via `searchParam`). Called as `({req, id, model, settings, serverMethod})` and expected to return the matching MongoosyDocument. Defaults to `({id, model}) => model.findByID(id)`. This has to be sync to get the docuemnt without forcing the promise to resolve
-	* @param {function {Promise|function} [options.searchMap] Function to use post-search-query to mangle outgoing documents (overrides `selectHidden`). Called as `(MongooseDocument, req)`
+	* @param {function <Promise>|function} [options.searchMap] Function to use post-search-query to mangle outgoing documents (overrides `selectHidden`). Called as `(MongooseDocument, req)`
 	* @param {string} [options.searchParam="q"] Special case URL querystring to identify that we are performating a search operation and not looking up an ID
 	* @param {string} [options.param="id"] Where to look in req.params for the document ID to get/update/delete
 	* @param {boolean} [selectHidden=false] Automatically surpress all output fields prefixed with '_'
@@ -104,15 +104,16 @@ module.exports = function MongoosyRest(mongoosy, options) {
 
 		var removeMetaParams = query => _.omit(query, ['limit', 'select', 'skip', 'sort']);
 		var attemptParse = query => {
-			try {
-				let res = {};
-				for (var k in query) {
+			let res = {};
+			for (k in query) {
+				try {
 					res[k] = JSON.parse(query[k]);
+				} catch(e) {
+					//debug('attemptParse.catch', e);
+					res[k] = query[k];
 				}
-				return res;
-			} catch(e) {
-				return query;
 			}
+			return res;
 		};
 
 		debug('Setup ReST middleware for model', model.modelName);
