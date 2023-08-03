@@ -350,11 +350,12 @@ module.exports = function MongoosyTextIndex(model, options) {
 	/**
 	* Recompute the meta index field on all matching documents
 	* This function is mainly used if the index definition changes
+	* NOTE: This function is designed to be as time efficient as possible so the index is updated via updateOne() and will skip hooks
 	*
 	* @param {Object} [options] Additional options to mutate behaviour, inherits from the model settings otherwise
 	* @param {Object} [options.match] Additional $match fields to filter by
 	* @param {Number} [options.parallel=20] Number of threads to run at once
-	* @param {Function} [options.logProgress] Function to show reindex progress. Called as ({current:Number, total:Numer}). Defaults to a throttled console.warn).
+	* @param {Function|Boolean} [options.logProgress] Function to show reindex progress. Called as ({current:Number, total:Numer}). Defaults to a throttled console.warn). Set to falsy to disable
 	*
 	* @returns {Promise} A promise which resolves when the operation has completed
 	*/
@@ -379,12 +380,23 @@ module.exports = function MongoosyTextIndex(model, options) {
 			.then(()=> model.find(reindexSettings.match)
 				.cursor()
 				.eachAsync(doc =>
-					model.searchReindexDoc(doc)
-						.then(()=> doc.save())
+					model.searchReindexDoc(doc, {apply: false})
+						.then(indexValue => model.findByIdAndUpdate(
+							doc._id,
+							{$set: {
+								[settings.searchIndexPath]: indexValue,
+							}},
+							{
+								setDefaultsOnInsert: false,
+								rawResult: true,
+								runValidators: false,
+							},
+						))
 						.then(()=> {
 							stats.current++;
-							return reindexSettings.logProgress(stats);
+							return reindexSettings.logProgress && reindexSettings.logProgress(stats);
 						})
+						.then(()=> doc)
 				, {parallel: reindexSettings.paralell})
 			)
 	};
