@@ -26,6 +26,8 @@ module.exports = function MongoosyRest(mongoosy, options) {
 		meta: false,
 		search: true, // Only works if model.search() is present
 		searchCount: true, // ^^^
+		searchCountCutoff: 100,
+		searchCountPrecise: false,
 		searchId: '_id',
 		docFinder: ({id, model}) => model.findById(id),
 		errorHandler: (res, code, text) => res.status(code).send(text.toString()),
@@ -60,6 +62,8 @@ module.exports = function MongoosyRest(mongoosy, options) {
 	* @param {boolean|array <function>|function} [options.meta=false] Enable retrieving the structure of the collection (as above)
 	* @param {boolean|array <function>|function} [options.search=true] Enable query + fuzzy searching against the model
 	* @param {boolean|array <function>|function} [options.searchCount=true] Enable query + fuzzy searching against the model (as a count)
+	* @param {Number} [options.searchCountCutoff=100] If the number of found documents exceeds this cutoff, return `{count: Cutoff, isCutoff: true}` rather than trying to get an exact number. Disable with `{countPrecise: true}`. Cutoffs are disabled if the skip count goes above this
+	* @param {Boolean} [options.searchCountPrecise=false] Always return the EXACT count rather than using the countCutoff
 	* @param {array<string>} [options.metaCustomFields] Additional fields to expose in meta
 	* @param {string} [options.metaParam="meta"] Special case URL suffix to identify that we are performating a meta operation and not looking up an ID
 	* @param {boolean|array <function>|function} [options.search=false] Enable searching of records or specify middleware(s) to execute beforehand
@@ -279,9 +283,20 @@ module.exports = function MongoosyRest(mongoosy, options) {
 
 						case 'searchCount': return model.search(req.query[settings.searchParam], {
 								count: true,
-								filter: removeMetaParams(_.omit(req.query, settings.searchParam)),
+								match: removeMetaParams(_.omit(req.query, settings.searchParam)),
+
+								// Apply a count cutoff if we are not being precise AND we either have no instructions to skip
+								// or the skip index is less than the cutoff anyway
+								...(!settings.searchCountPrecise && (!req.query.skip || req.query.skip < settings.searchCountCutoff) && {
+									limit: settings.searchCountCutoff,
+								}),
 							})
-							.then(count => ({count}))
+							.then(count => ({
+								count,
+								...(!settings.searchCountPrecise && (!req.query.skip || req.query.skip < settings.searchCountCutoff) && count == settings.searchCountCutoff && {
+									isCutoff: true,
+								}),
+							}))
 							.catch(e => settings.errorHandler(res, 400, e))
 
 						case 'save': return Promise.resolve(targetDoc)
