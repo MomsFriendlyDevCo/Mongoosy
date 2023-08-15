@@ -250,7 +250,12 @@ module.exports = function MongoosyRest(mongoosy, options) {
 						};
 
 					switch (serverMethod) {
-						case 'count': return model.countDocuments(attemptParse(removeMetaParams(req.query)))
+						case 'count': return Promise.resolve()
+							.then(()=> attemptParse(removeMetaParams(req.query)))
+							.then(filter => _.isEmpty(filter) // Can we cheat and use an estimated document count (if the query is blank)
+								? model.estimatedDocumentCount()
+								: model.countDocuments(filter)
+							)
 							.then(count => ({count}))
 							.catch(()=> res.sendStatus(400));
 
