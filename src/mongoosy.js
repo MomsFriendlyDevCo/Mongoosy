@@ -156,8 +156,8 @@ class Mongoosy extends mongoose.Mongoose {
 	* @type {Object}
 	*/
 	utils = {
-		promiseAllLimit: require('./promise.alllimit'),
-		promiseAllSeries: require('./promise.allseries'),
+		promiseAllLimit: require('./promise.allLimit'),
+		promiseAllSeries: require('./promise.allSeries'),
 	}
 
 }

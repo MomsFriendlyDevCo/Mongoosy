@@ -1,33 +1,15 @@
-var _ = require('lodash');
-var debug  = require('debug')('mongoosy:scenario');
-var glob = require('globby');
-var {Types} = require('mongoose');
+const _ = require('lodash');
+const debug = require('debug')('mongoosy:scenario');
+const fs = require('fs');
+const glob = require('globby');
+const {Types} = require('mongoose');
+const Stream = require('stream');
+const JSONStream = require('JSONStream');
+const es = require('event-stream');
+const promiseAllSeries = require('./promise.allSeries');
 
 
-/**
-* Deeply scan a document replacing all '$items' with their replacements
-* @param {Object} doc The document to deep scan, document is modified in place
-* @param {Object} lookup The lookup collection to replace items with
-* @returns {Object} An array of items that could not be resolved
-*/
-var scanDoc = (doc, lookup = {}) => {
-	var unresolved = [];
-	var scanNode = (node, path) => {
-		if (_.isArray(node)) {
-			node.forEach((v, k) => scanNode(v, path.concat(k)));
-		} else if (_.isPlainObject(node)) {
-			Object.keys(node).forEach(k => k != '$' && scanNode(node[k], path.concat(k)));
-		} else if (_.isString(node) && node.startsWith('$') && node.length > 1) {
-			if (lookup[node]) {
-				_.set(doc, path, new Types.ObjectId(lookup[node]));
-			} else {
-				unresolved.push(node)
-			}
-		}
-	};
-	scanNode(doc, []);
-	return unresolved;
-};
+
 
 
 /**
@@ -69,204 +51,408 @@ module.exports = function MongoosyScenario(mongoosy, input, options) {
 	if (settings.nuke && settings.collections) throw new Error('`nuke` cannot be used if `collections` is specified');
 	// }}}
 
-	return Promise.resolve()
-		.then(()=> Promise.all(_.castArray(input).map(item => {
-			if (_.isString(item)) {
-				return glob(item, options?.glob)
-					.then(files => Promise.all(files.map(file => Promise.resolve()
-						.then(()=> settings.importer(file))
-						.then(res => {
-							if (!res || !_.isObject(res)) throw new Error(`Error importing scenario contents from ${file}, expected object got ${typeof res}`);
-							debug('Scenario import', file, '=', _.keys(res).length, 'keys');
-							return res;
-						})
-					)))
-			} else if (_.isObject(item)) {
-				return item;
+	const lookup = {};
+	const stubbed = {};
+	const needed = {};
+	const created = {};
+	const modelCounts = {};
+	const indexes = {};
+
+	/**
+	 * Deeply scan a document replacing all '$items' with their replacements
+	 * @param {Object} doc The document to deep scan, document is modified in place
+	 * @param {Object} lookup The lookup collection to replace items with
+	 * @returns {Object} An array of items that could not be resolved
+	 */
+	const scanDoc = (doc, lookup = {}) => {
+		var unresolved = [];
+		var scanNode = (node, path) => {
+			if (_.isArray(node)) {
+				node.forEach((v, k) => scanNode(v, path.concat(k)));
+			} else if (_.isPlainObject(node)) {
+				Object.keys(node).forEach(k => k != '$' && scanNode(node[k], path.concat(k)));
+			} else if (_.isString(node) && node.startsWith('$') && node.length > 1) {
+				if (lookup[node]) {
+					_.set(doc, path, new Types.ObjectId(lookup[node]));
+				} else {
+					unresolved.push(node)
+				}
 			}
-		})))
-		.then(blob => _.flatten(blob))
-		.then(blob => blob.reduce((t, items) => {
-			_.forEach(items, (v, k) => {
-				t[k] = t[k] ? t[k].concat(v) : v;
-			});
-			return t;
-		}, {}))
-		.then(blob => {
-			if (!settings.postRead) return blob;
+		};
+		scanNode(doc, []);
+		return unresolved;
+	};
 
-			// Call postRead and wait for response
-			return Promise.resolve(settings.postRead(blob)).then(()=> blob);
-		})
-		.then(blob => {
-			_.forEach(blob, (v, k) => {
-				if (!mongoosy.models[k]) throw new Error(`Unknown model "${k}" when prepairing to create scenario`);
-			});
-			return blob;
-		})
-		.then(blob => { // Process each model we will operate on
-			var rebuildIndexes = {}; // Model => Indexes[] spec to rebuild later if in circular mode
-			debug('Build data for', Object.keys(blob).length, 'collections');
 
-			return mongoosy.utils.promiseAllSeries(
-				Object.keys(blob)
-					.map(m => () => Promise.resolve()
-						.then(()=> {
-							if (
-								settings.colleections?.[m]?.nuke === true
-								|| settings.nuke === true
-							) {
-								debug('STAGE: Clearing collection', m);
-								return mongoosy.models[m].deleteMany({})
-							}
-						})
-						.then(()=> {
-							if (!settings.circular || !settings.circularIndexDisable) return; // Skip index manipulation if disabled
-							debug('STAGE: Temporarily drop indexes');
-							return Promise.resolve()
-								.then(()=> mongoosy.models[m].syncIndexes({background: false})) // Let Mongoosy catch up to index spec
-								.then(()=> mongoosy.models[m].listIndexes())
-								.then(indexes => {
-									rebuildIndexes[m] = indexes.filter(index => !_.isEqual(index.key, {_id: 1})) // Ignore meta _id field
-									debug(`Will drop indexes on db.${m}:`, rebuildIndexes[m].map(i => i.name).join(', '));
+	/**
+	 * Remove indexes to allow adding stub documents
+	 * 
+	 * @param {Object} blob Complete scenario object
+	 * @returns {Promise<Object>}
+	 */
+	const disableIndexes = blob => {
+		//console.log('disableIndexes');
+		return mongoosy.utils.promiseAllSeries(
+			Object.keys(blob)
+				.map(m => () => Promise.resolve()
+					.then(()=> {
+						if (
+							settings.collections?.[m]?.nuke === true
+							|| settings.nuke === true
+						) {
+							debug('STAGE: Clearing collection', m);
+							return mongoosy.models[m].deleteMany({})
+						}
+					})
+					.then(()=> {
+						if (!settings.circular || !settings.circularIndexDisable) return; // Skip index manipulation if disabled
+						debug('STAGE: Temporarily drop indexes');
+						return Promise.resolve()
+							.then(()=> mongoosy.models[m].syncIndexes({background: false})) // Let Mongoosy catch up to index spec
+							.then(()=> mongoosy.models[m].listIndexes())
+							.then(indexes => {
+								indexes[m] = indexes.filter(index => !_.isEqual(index.key, {_id: 1})) // Ignore meta _id field
+								debug(`Will drop indexes on db.${m}:`, indexes[m].map(i => i.name).join(', '));
 
-									// Tell the mongo driver to drop the indexes we don't care about
-									// NOTE: Mongoose will abort in-progress index creation when "dropIndexes" is passed an array
-									// @see https://jira.mongodb.org/browse/SERVER-37726
-									return mongoosy.models[m].collection.dropIndexes(rebuildIndexes[m].map(index => index.name));
-								})
-						})
-					)
-			)
-				.then(()=> ({blob, rebuildIndexes}));
-		})
-		.then(({blob, rebuildIndexes}) => ({
-			rebuildIndexes,
-			queue: _.flatMap(blob, (items, collection) => { // Flatten objects into array
-				return items.map(item => {
-						if (item.$ && !item.$.startsWith('$')) throw new Error(`All item '$' references must have a value that starts with '$' - given "${item.$}"`);
-						return {
-							id: item.$,
-							needs: options?.circular ? [] : scanDoc(item), // Calculate document pre-requisite needs if not in circular mode
-							collection,
-							item: _.omit(item, '$'),
-						};
-					});
-			}),
-		}))
-		.then(({queue, rebuildIndexes}) => {
-			var lookup = {};
-			if (!options?.circular) return {queue, lookup, rebuildIndexes}; // Not stubbing
-			debug('STAGE: Create stubs');
+								// Tell the mongo driver to drop the indexes we don't care about
+								// NOTE: Mongoose will abort in-progress index creation when "dropIndexes" is passed an array
+								// @see https://jira.mongodb.org/browse/SERVER-37726
+								return mongoosy.models[m].collection.dropIndexes(indexes[m].map(index => index.name));
+							});
+					})
+				)
+		).then(() => blob);
+	};
 
-			// Create empty records for all items with an ID
-			return mongoosy.utils.promiseAllLimit(options?.threads ?? 3,
-				queue
-					.filter(item => item.id)
-					.map(item => ()=>
-						mongoosy.models[item.collection].create([{}], {validateBeforeSave: false}) // Insert without validation (skips {required: true} specs)
-							.then(([created]) => {
-								item.stub = true;
-								lookup[item.id] = created._id;
-							})
-					)
-			)
+
+	/**
+	 * Re-estabalish original indexes after creating documents
+	 * 
+	 * @returns {Promise}
+	 */
+	const rebuildIndexes = () => {
+		debug('STAGE: Rebuild indexes')
+		return Promise.all(Object.keys(indexes)
+			.map(modelName => Promise.resolve()
+				.then(()=> debug(`Re-create indexes on db.${modelName}:`, indexes[modelName].map(i => i.name).join(', ')))
 				.then(()=> {
-					debug('Created', Object.keys(lookup).length, 'stubs');
-
-					queue.forEach(q => scanDoc(q.item, lookup)); // Map all stub IDs into the documents
-
-					return {queue, lookup, rebuildIndexes};
+					if (_.isArray(indexes[modelName]) && indexes[modelName].length > 0) {
+						mongoosy.models[modelName].collection.createIndexes(indexes[modelName]);
+					}
 				})
-		})
-		.then(({queue, lookup, rebuildIndexes}) => {
-			var scenarioCycle = 0;
-			var modelCounts = {};
+			)
+		);
+	};
 
-			var tryCreate = ()=> Promise.resolve()
-				.then(()=> debug(`STAGE: Try/Create cycle #${scenarioCycle}`))
-				.then(()=> mongoosy.utils.promiseAllLimit(options?.threads ?? 3, queue.map(item => ()=> {
-					if (item.needs.length > 0) return; // Cannot create at this stage
-					if (!mongoosy.models[item.collection]) throw new Error(`Cannot create item in non-existant or model "${item.collection}"`);
 
-					if (item.stub) { // Item was stubbed in previous stage - update its content if we can
-						// NOTE: We can't use findByIdAndUpdate() (or similar) because they don't fire validators
-						return mongoosy.models[item.collection].findById(lookup[item.id])
-							.then(doc => {
-								Object.assign(doc, item.item);
-								return doc.save();
-							})
-							.then(()=> {
-								item.created = true;
-								if (options?.postCreate || options?.postStats) {
-									modelCounts[item.collection] = modelCounts[item.collection] ? ++modelCounts[item.collection] : 1;
-									if (settings.postCreate) settings.postCreate(item.collection, modelCounts[item.collection]);
-								}
-							})
-							.catch(e => {
-								debug('Error when updating stub doc', item.collection, 'using spec', item.item, 'Error:', e);
-								throw e;
-							});
+	/**
+	 * Convert incoming objects to readable streams
+	 * 
+	 * @param {Object} blob Complete scenario object
+	 * @returns {Object<Stream>}
+	 */
+	const convertStreams = blob => {
+		debug('Converting data to streams');
+		return Promise.resolve()
+			.then(() => {
+				return _.mapValues(blob, item => {
+					//console.log('instanceOf', item instanceof Stream);
+					if (item instanceof Stream) {
+						//item.pause();
+						return item;
 					} else {
-						return mongoosy.models[item.collection].insertOne(item.item)
-							.then(created => {
-								// Stash ID?
-								if (item.id) lookup[item.id] = created._id;
-								item.created = true;
+						const stream = Stream.Readable.from(item, { objectMode: true });
+						return stream;
+					}
+				});
+			});
+	};
 
-								if (options?.postCreate || options?.postStats) {
-									modelCounts[item.collection] = modelCounts[item.collection] ? ++modelCounts[item.collection] : 1;
-									if (settings.postCreate) settings.postCreate(item.collection, modelCounts[item.collection]);
-								}
-							})
-							.catch(e => {
-								debug('Error when creating doc', item.collection, 'using spec', item.item, 'Error:', e);
-								throw e;
-							});
+
+	/**
+	 * Create and read streams from each key and create documents
+	 * 
+	 * @param {Object} blob Complete scenario object
+	 * @returns {Promise<Object>}
+	 */
+	const processStreams = blob => {
+		//console.log('processStreams');
+		// When not a stream, create one
+		return Promise.resolve()
+			.then(() => convertStreams(blob))
+			.then(streams => mongoosy.utils.promiseAllSeries(
+				_.flatMap(streams, (stream, collection) => () => {
+					//debug('Processing', collection);
+
+					return new Promise(resolve => {
+
+						let incomplete = 0;
+
+						/**
+						 * Map an incoming item with reference and collection
+						 * 
+						 * @param {Object} item 
+						 * @returns {Object}
+						 */
+						const mapItem = function(item) {
+							//console.log('mapItem', item);
+							if (item.$ && !item.$.startsWith('$')) throw new Error(`All item '$' references must have a value that starts with '$' - given "${item.$}"`);
+
+							if (!needed[collection]) needed[collection] = [];
+							return {
+								ref: item.$,
+								collection,
+								item: _.omit(item, '$'),
+							};
+						};
+
+
+						/**
+						 * Create a stub document given an object
+						 * 
+						 * @param {Object} item 
+						 * @returns {Promise<Object>}
+						 */
+						const createStub = function(item) {
+							if (!options?.circular) return item;
+							if (!item || !item.ref) return item; // NOTE: Only stub those with "ref" as per the original filter
+							if (stubbed[item.ref] || created[item.ref]) return item;
+
+							//console.log('createStub', item.ref);
+							return Promise.resolve()
+								.then(() => mongoosy.models[item.collection].create([{}], {validateBeforeSave: false})) // Insert without validation (skips {required: true} specs)
+								.then(([created]) => {
+									//console.log('created.stub', item.ref, created._id);
+									lookup[item.ref] = created._id;
+									stubbed[item.ref] = true;
+								})
+								.then(() => {
+									//debug('Created', Object.keys(lookup).length, 'stubs');
+									//needed[item.ref] = scanDoc(item, lookup);
+									return item;
+								});
+						};
+
+
+						/**
+						 * Insert or Update a stub with complete document
+						 * 
+						 * @param {Object} item 
+						 * @returns {Promise<Object>}
+						 */
+						const updateStub = item => {
+							if (!item) return;
+							if (created[item.ref]) return item; // FIXME: Unable to lookup those without "ref"
+
+							//console.log('updateStub', item.ref);
+							return Promise.resolve()
+								.then(() => {
+									const needs = scanDoc(item.item, lookup);
+									if (needs.length > 0) {
+										//console.log('needs', item.collection, item.ref, needs, lookup);
+										needed[item.collection].push(...needs);
+										incomplete++;
+										return; // Cannot create at this stage
+									}
+									if (!mongoosy.models[item.collection]) throw new Error(`Cannot create item in non-existant or model "${item.collection}"`);
+				
+									if (stubbed[item.ref]) { // Item was stubbed in previous stage - update its content if we can
+										// NOTE: We can't use findByIdAndUpdate() (or similar) because they don't fire validators
+										return mongoosy.models[item.collection].findById(lookup[item.ref])
+											.then(doc => {
+												//console.log('lookup', item.ref, lookup[item.ref]);
+												//console.log('doc', doc);
+												//console.log('item', item);
+												Object.assign(doc, item.item);
+												return doc.save();
+											})
+											.then(()=> {
+												created[item.ref] = true;
+												stubbed[item.ref] = false;
+												needed[item.collection] = needed[item.collection].filter(n => !lookup[n])
+												if (options?.postCreate || options?.postStats) {
+													modelCounts[item.collection] = modelCounts[item.collection] ? ++modelCounts[item.collection] : 1;
+													if (settings.postCreate) settings.postCreate(item.collection, modelCounts[item.collection]);
+												}
+											})
+											.catch(e => {
+												debug('Error when updating stub doc', item.collection, 'using spec', item.item, 'Error:', e);
+												//if (e.code === 11000) ...
+												throw e;
+											});
+									} else {
+										return mongoosy.models[item.collection].insertOne(item.item)
+											.then(created => {
+												//console.log('created.insertOne', item.ref, created._id);
+												// Stash ID?
+												// NOTE: Only require a "created" state for items with "ref"
+												if (item.ref) {
+													lookup[item.ref] = created._id;
+													created[item.ref] = true;
+													stubbed[item.ref] = false;
+													needed[item.collection] = needed[item.collection].filter(n => !lookup[n])
+												}
+				
+												if (options?.postCreate || options?.postStats) {
+													modelCounts[item.collection] = modelCounts[item.collection] ? ++modelCounts[item.collection] : 1;
+													if (settings.postCreate) settings.postCreate(item.collection, modelCounts[item.collection]);
+												}
+											})
+											.catch(e => {
+												debug('Error when creating doc', item.collection, 'using spec', item.item, 'Error:', e);
+												throw e;
+											});
+									}
+								})
+								.then(() => {
+									//needed[item.ref] = scanDoc(item.item, lookup);
+									return item; // Finally return the item
+								});
+						};
+
+						//stream.on('readable', () => { // FIXME: Was triggering multiple times
+						debug('STAGE: Create/Updating documents', collection);
+
+						/**
+						 * Recursive function for reading incoming stream data in a stepwise manner
+						 */
+						const readStream = () => {
+							const data = stream.read();
+							if (data === null) {
+								debug('Data complete');
+								return resolve();
+							}
+
+							
+							Promise.resolve()
+								.then(() => mapItem(data))
+								.then(res => createStub(res))
+								.then(res => updateStub(res)) // FIXME: But we need to attempt missing ones from the whole list....
+								.catch(e => {
+									console.log('map.catch', e);
+									// TODO: reject promise?
+								})
+								.finally(() => {
+									setTimeout(() => {
+										readStream();
+									}); // Recurse
+								});
+							};
+
+							readStream();
+						//});
+
+						/*
+						stream.on('end', () => {
+							console.log('stream.end', incomplete);
+							//resolve();
+						});
+						*/
+
+						stream.on('error', err => {
+							console.log('stream.error', err);
+						});
+					});
+
+				})
+			))
+			.then(() => blob);
+	};
+
+
+	/**
+	 * Import file and begin processing
+	 * 
+	 * @param {Boolean} disableIndexes Control if indexes should be removed on this pass
+	 * @returns {Promise<Object>}
+	 */
+	const retrieveFiles = disableIndexes => {
+		return new Promise(resolve => {
+
+			/**
+			 * Recursive function to enable reprocessing until no documents are missing
+			 */
+			const retrieveFilesInner = () => {
+				Promise.resolve()
+				.then(()=> Promise.all(_.castArray(input).map(item => {
+					if (_.isString(item)) {
+						return glob(item, options?.glob) // FIXME: Use "settings.glob"
+							.then(files => Promise.all(files.map(file => Promise.resolve()
+								.then(()=> settings.importer(file)) // TODO: Detect and handle being passed a Stream.
+								.then(res => {
+									if (!res || !_.isObject(res)) throw new Error(`Error importing scenario contents from ${file}, expected object got ${typeof res}`);
+									debug('Scenario import', file, '=', _.keys(res).length, 'keys');
+									return res;
+								})
+							)))
+					} else if (_.isObject(item)) {
+						return item;
 					}
 				})))
-				.then(()=> { // Filter queue to non-created items
-					var newQueue = queue.filter(item => !item.created);
-					if (newQueue.length > 0 && queue.length == newQueue.length) {
-						debug('------- UNRESOLVABLE SCENARIO -----');
-						debug('Leftover unresolvable / wanted IDs: %O', _.chain(newQueue)
-							.map(q => q.needs)
-							.flatten()
-							.sort()
-							.uniq()
-							.value()
-						);
-						debug('-------- UNRESOLVABLE QUEUE -------');
-						debug(newQueue);
-						debug('---------------- END --------------');
-						throw new Error(debug.enabled ? 'Unresolvable scenario' : 'Unresolvable scenario - set DEBUG=mongoosy:scenario to see document queue');
-					}
+				.then(blob => _.flatten(blob))
+				.then(blob => blob.reduce((t, items) => {
+					_.forEach(items, (v, k) => {
+						t[k] = t[k] ? t[k].concat(v) : v;
+					});
+					return t;
+				}, {}))
+				.then(blob => {
+					if (!settings.postRead) return blob;
 
-					debug('Imported', queue.length - newQueue.length, 'in scenario cycle with', newQueue.length, 'remaining after cycle', ++scenarioCycle);
-					queue = newQueue;
+					// Call postRead and wait for response
+					return Promise.resolve()
+						.then(() => settings.postRead(blob))
+						.then(() => blob);
 				})
-				.then(()=> queue = queue.map(item => {
-					item.needs = scanDoc(item.item, lookup);
-					return item;
-				}))
-				// FIXME: Decouple stack depth?
-				.then(()=> queue.length && tryCreate())
+				.then(blob => {
+					_.forEach(blob, (v, k) => {
+						if (!mongoosy.models[k]) throw new Error(`Unknown model "${k}" when prepairing to create scenario`);
+					});
+					//console.log('blob', blob);
+					return blob;
+				})
+				.then(blob => {
+					if (disableIndexes) {
+						return disableIndexes(blob); // Only nuke items on first pass
+					} else {
+						return blob;
+					}
+				})
+				.then(blob => processStreams(blob))
+				.then(blob => {
+					console.log('needed', needed);
 
-			return tryCreate()
-				.then(()=> ({rebuildIndexes, modelCounts}))
-		})
-		.then(({rebuildIndexes, modelCounts}) => {
+					const remaining = _.flatMap(needed, item => {
+						return item.length;
+					})
+					.reduce((acc, cur) => {
+						return acc + cur;
+					}, 0);
+					debug('')
+
+					if (remaining > 0) {
+						debug('Leftover unresolvable / wanted IDs', remaining);
+						setTimeout(() => {
+							retrieveFilesInner();
+						}); // Recurse
+					} else {
+						debug('Processing completed!');
+						resolve(blob);
+					}
+				});
+				// TODO: catch and reject outer promise
+			};
+
+			retrieveFilesInner();
+		});
+	};
+
+	return retrieveFiles()
+		.then(() => {
 			if (!settings.circular || !settings.circularIndexDisable) return {modelCounts}; // Skip index manipulation if disabled
-			debug('STAGE: Rebuild indexes')
-			return Promise.all(Object.keys(rebuildIndexes)
-				.map(modelName =>Promise.resolve()
-					.then(()=> debug(`Re-create indexes on db.${modelName}:`, rebuildIndexes[modelName].map(i => i.name).join(', ')))
-					.then(()=> (_.isArray(rebuildIndexes[modelName]) && rebuildIndexes[modelName].length > 0)
-						? mongoosy.models[modelName].collection.createIndexes(rebuildIndexes[modelName])
-						: undefined
-					)
-				)
-			).then(()=> ({modelCounts}))
+
+			return rebuildIndexes()
+				.then(()=> ({modelCounts}));
 		})
 		.then(({modelCounts}) => {
 			debug('STAGE: Finish');
