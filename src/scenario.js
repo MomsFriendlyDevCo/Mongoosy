@@ -1,15 +1,9 @@
 const _ = require('lodash');
 const debug = require('debug')('mongoosy:scenario');
-const fs = require('fs');
 const glob = require('globby');
 const {Types} = require('mongoose');
 const Stream = require('stream');
-const JSONStream = require('JSONStream');
-const es = require('event-stream');
-const promiseAllSeries = require('./promise.allSeries');
-
-
-
+//const Stream = require('readable-stream');
 
 
 /**
@@ -87,41 +81,41 @@ module.exports = function MongoosyScenario(mongoosy, input, options) {
 	/**
 	 * Remove indexes to allow adding stub documents
 	 * 
-	 * @param {Object} blob Complete scenario object
+	 * @param {Array} collections List of collections to have indexes removed from
 	 * @returns {Promise<Object>}
 	 */
-	const disableIndexes = blob => {
-		//console.log('disableIndexes');
+	const disableIndexes = collections => {
+		debug('STAGE: Disabling Indexes');
 		return mongoosy.utils.promiseAllSeries(
-			Object.keys(blob)
-				.map(m => () => Promise.resolve()
-					.then(()=> {
-						if (
-							settings.collections?.[m]?.nuke === true
-							|| settings.nuke === true
-						) {
-							debug('STAGE: Clearing collection', m);
-							return mongoosy.models[m].deleteMany({})
-						}
-					})
-					.then(()=> {
-						if (!settings.circular || !settings.circularIndexDisable) return; // Skip index manipulation if disabled
-						debug('STAGE: Temporarily drop indexes');
-						return Promise.resolve()
-							.then(()=> mongoosy.models[m].syncIndexes({background: false})) // Let Mongoosy catch up to index spec
-							.then(()=> mongoosy.models[m].listIndexes())
-							.then(indexes => {
-								indexes[m] = indexes.filter(index => !_.isEqual(index.key, {_id: 1})) // Ignore meta _id field
-								debug(`Will drop indexes on db.${m}:`, indexes[m].map(i => i.name).join(', '));
+			collections.map(m => () => Promise.resolve()
+				.then(()=> {
+					if (
+						settings.collections?.[m]?.nuke === true
+						|| settings.nuke === true
+					) {
+						debug('Clearing collection', m);
+						return mongoosy.models[m].deleteMany({})
+					}
+				})
+				.then(()=> {
+					if (!settings.circular || !settings.circularIndexDisable) return; // Skip index manipulation if disabled
 
-								// Tell the mongo driver to drop the indexes we don't care about
-								// NOTE: Mongoose will abort in-progress index creation when "dropIndexes" is passed an array
-								// @see https://jira.mongodb.org/browse/SERVER-37726
-								return mongoosy.models[m].collection.dropIndexes(indexes[m].map(index => index.name));
-							});
-					})
-				)
-		).then(() => blob);
+					debug('Temporarily drop indexes', m);
+					return Promise.resolve()
+						.then(()=> mongoosy.models[m].syncIndexes({background: false})) // Let Mongoosy catch up to index spec
+						.then(()=> mongoosy.models[m].listIndexes())
+						.then(indexes => {
+							indexes[m] = indexes.filter(index => !_.isEqual(index.key, {_id: 1})) // Ignore meta _id field
+							debug(`Will drop indexes on db.${m}:`, indexes[m].map(i => i.name).join(', '));
+
+							// Tell the mongo driver to drop the indexes we don't care about
+							// NOTE: Mongoose will abort in-progress index creation when "dropIndexes" is passed an array
+							// @see https://jira.mongodb.org/browse/SERVER-37726
+							return mongoosy.models[m].collection.dropIndexes(indexes[m].map(index => index.name));
+						});
+				})
+			)
+		);
 	};
 
 
@@ -152,21 +146,39 @@ module.exports = function MongoosyScenario(mongoosy, input, options) {
 	 * @returns {Object<Stream>}
 	 */
 	const convertStreams = blob => {
-		debug('Converting data to streams');
-		return Promise.resolve()
-			.then(() => {
+		debug('STAGE: Converting data to streams');
+		//return Promise.resolve()
+		//	.then(() => {
 				return _.mapValues(blob, item => {
-					//console.log('instanceOf', item instanceof Stream);
+					// FIXME: "readable-stream" returns instance of what? Different import...
+					console.log('instanceOf', _.isFunction(item._read), item instanceof Stream, item instanceof Stream.Readable);
 					if (item instanceof Stream) {
+					//if (item.readable) { // NOTE: "Stream" but not matching instance
+					//if (item instanceof Stream || _.isFunction(item._read)) {
+					//if (item instanceof Stream.Readable) {
+					//if (_.isFunction(item._read)) {
 						//item.pause();
+						//const reader = item.getReader();
+						//console.log('reader', reader);
+						//return reader;
 						return item;
 					} else {
 						const stream = Stream.Readable.from(item, { objectMode: true });
 						return stream;
 					}
 				});
-			});
+		//	});
 	};
+
+
+	const concatStreams = streams =>{
+		let pass = new Stream.PassThrough();
+		for (let stream of streams) {
+			const end = stream == streams.at(-1);
+			pass = stream.pipe(pass, { end })
+		}
+		return pass;
+	}
 
 
 	/**
@@ -176,13 +188,14 @@ module.exports = function MongoosyScenario(mongoosy, input, options) {
 	 * @returns {Promise<Object>}
 	 */
 	const processStreams = blob => {
-		//console.log('processStreams');
+		//debug('STAGE: Process streams');
 		// When not a stream, create one
 		return Promise.resolve()
-			.then(() => convertStreams(blob))
+			//.then(() => convertStreams(blob))
+			.then(() => blob) // TODO: Rename variables
 			.then(streams => mongoosy.utils.promiseAllSeries(
 				_.flatMap(streams, (stream, collection) => () => {
-					//debug('Processing', collection);
+					debug('STAGE: Process', collection);
 
 					return new Promise(resolve => {
 
@@ -258,8 +271,11 @@ module.exports = function MongoosyScenario(mongoosy, input, options) {
 				
 									if (stubbed[item.ref]) { // Item was stubbed in previous stage - update its content if we can
 										// NOTE: We can't use findByIdAndUpdate() (or similar) because they don't fire validators
+										//console.log('findById', item.collection, item.ref, lookup[item.ref]);
 										return mongoosy.models[item.collection].findById(lookup[item.ref])
 											.then(doc => {
+												if (!doc) throw new Error(`Document "${item.ref}" => "${lookup[item.ref]}" not found!`);
+
 												//console.log('lookup', item.ref, lookup[item.ref]);
 												//console.log('doc', doc);
 												//console.log('item', item);
@@ -315,16 +331,47 @@ module.exports = function MongoosyScenario(mongoosy, input, options) {
 
 						/**
 						 * Recursive function for reading incoming stream data in a stepwise manner
+						 * NOTE: This approach breaks down between "JSONStream" or "stream-json" and "createReadStream" due to various changes through stream versions
 						 */
+						/*
 						const readStream = () => {
-							const data = stream.read();
-							if (data === null) {
-								debug('Data complete');
+							try {
+								const data = stream.read();
+								console.log('readStream', data);
+								if (data === null) {
+									debug('Data complete');
+									return resolve();
+								}
+
+								Promise.resolve()
+									.then(() => mapItem(data))
+									.then(res => createStub(res))
+									.then(res => updateStub(res)) // FIXME: But we need to attempt missing ones from the whole list....
+									.catch(e => {
+										console.log('map.catch', e);
+										// TODO: reject promise?
+									})
+									.finally(() => {
+										setTimeout(() => {
+											readStream();
+										}); // Recurse
+									});
+							} catch(e) {
+								console.log('e', collection, stream, e);
+								debug('Data error');
 								return resolve();
 							}
+						};
+						*/
 
-							
+						/**
+						 * Attempt at bypassing "read()" issues by using "data" events result in similar incompatibilities
+						 */
+						/*
+						stream.on('data', data => {
+							console.log('stream.data', data);
 							Promise.resolve()
+								.then(() => stream.pause())
 								.then(() => mapItem(data))
 								.then(res => createStub(res))
 								.then(res => updateStub(res)) // FIXME: But we need to attempt missing ones from the whole list....
@@ -332,22 +379,60 @@ module.exports = function MongoosyScenario(mongoosy, input, options) {
 									console.log('map.catch', e);
 									// TODO: reject promise?
 								})
-								.finally(() => {
-									setTimeout(() => {
-										readStream();
-									}); // Recurse
-								});
-							};
-
-							readStream();
-						//});
-
-						/*
-						stream.on('end', () => {
-							console.log('stream.end', incomplete);
-							//resolve();
+								.finally(() => stream.resume());
 						});
 						*/
+
+						console.log('waiting for readable', collection);
+						stream.once('readable', () => {
+							console.log('readable', collection);
+						});
+
+						/**
+						 * Implementing a writable stream to consume the readable and utilising the callback for "pause" seems robust
+						 */
+						let processed = 0;
+						const processingStream = new Stream.Writable({
+							write(items, encoding, callback) {
+								if (!_.isArray(items)) items = [items]; // FIXME: Ever passed anything other than an array?
+
+								Promise.all(
+									items.map(item => {
+										return Promise.resolve()
+											.then(() => mapItem(item))
+											.then(res => createStub(res))
+											.then(res => updateStub(res)) // FIXME: But we need to attempt missing ones from the whole list....
+											.catch(e => {
+												console.warn('Error processing item', item, e);
+												// TODO: reject promise?
+												//process.exit(1);
+											})
+											.finally(() => {
+												if (++processed % 500 === 0) debug(`Processed ${processed} items`);
+											});
+									})
+								).finally(() => callback());
+							},
+							objectMode: true
+						});
+
+						processingStream.on('pipe', src => {
+							console.error('pipe', collection);
+						});
+						processingStream.on('unpipe', src => {
+							console.error('unpipe', collection);
+						});
+
+						stream.pipe(processingStream);
+
+						stream.on('close', () => {
+							console.log('stream.close', incomplete);
+							resolve();
+						});
+
+						stream.on('end', () => {
+							console.log('stream.end', incomplete);
+						});
 
 						stream.on('error', err => {
 							console.log('stream.error', err);
@@ -361,89 +446,126 @@ module.exports = function MongoosyScenario(mongoosy, input, options) {
 
 
 	/**
-	 * Import file and begin processing
+	 * Imports scenario files
 	 * 
-	 * @param {Boolean} disableIndexes Control if indexes should be removed on this pass
 	 * @returns {Promise<Object>}
 	 */
-	const retrieveFiles = disableIndexes => {
+	const loadScenarios = () => {
+		return Promise.resolve()
+			.then(()=> Promise.all(_.castArray(input).map(item => {
+				if (_.isString(item)) {
+					return glob(item, options?.glob) // FIXME: Use "settings.glob"
+						.then(files => Promise.all(files.map(file => Promise.resolve()
+							.then(() => delete require.cache[require.resolve(file)]) // Force import to re-execute any initalisation
+							.then(()=> settings.importer(file))
+							.then(res => {
+								if (!res || !_.isObject(res)) throw new Error(`Error importing scenario contents from ${file}, expected object got ${typeof res}`);
+								debug('Scenario import', file, '=', _.keys(res).length, 'keys');
+								return res;
+							})
+						)))
+				} else if (_.isObject(item)) {
+					return item;
+				}
+			})))
+			.then(blob => _.flatten(blob))
+	};
+
+
+	/**
+	 * Import file and begin processing
+	 * 
+	 * @returns {Promise<Object>}
+	 */
+	const retrieveFiles = () => {
 		return new Promise(resolve => {
 
 			/**
 			 * Recursive function to enable reprocessing until no documents are missing
 			 */
 			const retrieveFilesInner = () => {
+				debug('STAGE: Retrieving files for processing');
 				Promise.resolve()
-				.then(()=> Promise.all(_.castArray(input).map(item => {
-					if (_.isString(item)) {
-						return glob(item, options?.glob) // FIXME: Use "settings.glob"
-							.then(files => Promise.all(files.map(file => Promise.resolve()
-								.then(()=> settings.importer(file)) // TODO: Detect and handle being passed a Stream.
-								.then(res => {
-									if (!res || !_.isObject(res)) throw new Error(`Error importing scenario contents from ${file}, expected object got ${typeof res}`);
-									debug('Scenario import', file, '=', _.keys(res).length, 'keys');
-									return res;
-								})
-							)))
-					} else if (_.isObject(item)) {
-						return item;
-					}
-				})))
-				.then(blob => _.flatten(blob))
-				.then(blob => blob.reduce((t, items) => {
-					_.forEach(items, (v, k) => {
-						t[k] = t[k] ? t[k].concat(v) : v;
-					});
-					return t;
-				}, {}))
+				.then(() => loadScenarios())
 				.then(blob => {
-					if (!settings.postRead) return blob;
-
-					// Call postRead and wait for response
-					return Promise.resolve()
-						.then(() => settings.postRead(blob))
-						.then(() => blob);
-				})
-				.then(blob => {
-					_.forEach(blob, (v, k) => {
-						if (!mongoosy.models[k]) throw new Error(`Unknown model "${k}" when prepairing to create scenario`);
+					//console.log('blob', blob)
+					blob = blob.map(file => {
+						//console.log('file', file);
+						return convertStreams(file)
 					});
-					//console.log('blob', blob);
 					return blob;
 				})
 				.then(blob => {
-					if (disableIndexes) {
-						return disableIndexes(blob); // Only nuke items on first pass
-					} else {
-						return blob;
-					}
+					return Promise.all(blob.map(file => {
+						//console.log('file', file)
+						return Promise.resolve()
+							.then(() => file) // FIXME: Rename variables
+							.then(blob => {
+								if (!settings.postRead) return blob;
+
+								// Call postRead and wait for response
+								return Promise.resolve()
+									.then(() => settings.postRead(blob))
+									.then(() => blob);
+							})
+							.then(blob => {
+								_.forEach(blob, (v, k) => {
+									if (!mongoosy.models[k]) throw new Error(`Unknown model "${k}" when prepairing to create scenario`);
+								});
+								//console.log('blob', blob);
+								return blob;
+							})
+							/*
+							.then(blob => {
+								if (disableIndexes) {
+									return disableIndexes(blob); // Only nuke items on first pass
+								} else {
+									return blob;
+								}
+							})
+							*/
+							.then(blob => processStreams(blob))
+					}))
+					.then(blob => {
+						console.log('needed', needed);
+
+						const remaining = _.flatMap(needed, item => {
+							return item.length;
+						})
+						.reduce((acc, cur) => {
+							return acc + cur;
+						}, 0);
+						debug('')
+
+						if (remaining > 0) {
+							debug('Leftover unresolvable / wanted IDs', remaining);
+							setTimeout(() => {
+								retrieveFilesInner();
+							}); // Recurse
+						} else {
+							debug('Processing completed!');
+							resolve(blob);
+						}
+					});
 				})
-				.then(blob => processStreams(blob))
-				.then(blob => {
-					console.log('needed', needed);
-
-					const remaining = _.flatMap(needed, item => {
-						return item.length;
-					})
-					.reduce((acc, cur) => {
-						return acc + cur;
-					}, 0);
-					debug('')
-
-					if (remaining > 0) {
-						debug('Leftover unresolvable / wanted IDs', remaining);
-						setTimeout(() => {
-							retrieveFilesInner();
-						}); // Recurse
-					} else {
-						debug('Processing completed!');
-						resolve(blob);
-					}
-				});
 				// TODO: catch and reject outer promise
 			};
 
-			retrieveFilesInner();
+
+			/**
+			 * First remove indexes, then process files.
+			 */
+			Promise.resolve()
+				.then(() => loadScenarios())
+				.then(scenarios => {
+					return disableIndexes(_(scenarios)
+						.map(Object.keys)
+						.flatten()
+						.uniq()
+						.value()
+					);
+				})
+				.then(() => retrieveFilesInner());
 		});
 	};
 
@@ -455,7 +577,7 @@ module.exports = function MongoosyScenario(mongoosy, input, options) {
 				.then(()=> ({modelCounts}));
 		})
 		.then(({modelCounts}) => {
-			debug('STAGE: Finish');
+			debug('STAGE: Finish', modelCounts);
 			if (settings.postStats) settings.postStats(modelCounts)
 		});
 };
