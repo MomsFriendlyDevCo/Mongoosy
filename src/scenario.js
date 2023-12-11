@@ -4,6 +4,7 @@ const glob = require('globby');
 const {Types} = require('mongoose');
 const Stream = require('stream');
 //const Stream = require('readable-stream');
+const es = require('event-stream');
 
 
 /**
@@ -198,7 +199,6 @@ module.exports = function MongoosyScenario(mongoosy, input, options) {
 					debug('STAGE: Process', collection);
 
 					return new Promise(resolve => {
-
 						let incomplete = 0;
 
 						/**
@@ -423,7 +423,9 @@ module.exports = function MongoosyScenario(mongoosy, input, options) {
 							console.error('unpipe', collection);
 						});
 
-						stream.pipe(processingStream);
+						stream
+							.pipe(es.filterSync(item => (!item.$ || !created[item.$]))) // Remove items which have already been created
+							.pipe(processingStream);
 
 						stream.on('close', () => {
 							console.log('stream.close', incomplete);
