@@ -151,17 +151,9 @@ module.exports = function MongoosyScenario(mongoosy, input, options) {
 		//return Promise.resolve()
 		//	.then(() => {
 				return _.mapValues(blob, item => {
-					// FIXME: "readable-stream" returns instance of what? Different import...
-					console.log('instanceOf', _.isFunction(item._read), item instanceof Stream, item instanceof Stream.Readable);
-					if (item instanceof Stream) {
-					//if (item.readable) { // NOTE: "Stream" but not matching instance
-					//if (item instanceof Stream || _.isFunction(item._read)) {
-					//if (item instanceof Stream.Readable) {
-					//if (_.isFunction(item._read)) {
-						//item.pause();
-						//const reader = item.getReader();
-						//console.log('reader', reader);
-						//return reader;
+					if (_.isFunction(item)) {
+						return item;
+					} else if (item instanceof Stream) {
 						return item;
 					} else {
 						const stream = Stream.Readable.from(item, { objectMode: true });
@@ -172,6 +164,7 @@ module.exports = function MongoosyScenario(mongoosy, input, options) {
 	};
 
 
+	/*
 	const concatStreams = streams =>{
 		let pass = new Stream.PassThrough();
 		for (let stream of streams) {
@@ -179,7 +172,8 @@ module.exports = function MongoosyScenario(mongoosy, input, options) {
 			pass = stream.pipe(pass, { end })
 		}
 		return pass;
-	}
+	};
+	*/
 
 
 	/**
@@ -198,250 +192,239 @@ module.exports = function MongoosyScenario(mongoosy, input, options) {
 				_.flatMap(streams, (stream, collection) => () => {
 					debug('STAGE: Process', collection);
 
-					return new Promise(resolve => {
-						let incomplete = 0;
-
-						/**
-						 * Map an incoming item with reference and collection
-						 * 
-						 * @param {Object} item 
-						 * @returns {Object}
-						 */
-						const mapItem = function(item) {
-							//console.log('mapItem', item);
-							if (item.$ && !item.$.startsWith('$')) throw new Error(`All item '$' references must have a value that starts with '$' - given "${item.$}"`);
-
-							if (!needed[collection]) needed[collection] = [];
-							return {
-								ref: item.$,
-								collection,
-								item: _.omit(item, '$'),
-							};
-						};
-
-
-						/**
-						 * Create a stub document given an object
-						 * 
-						 * @param {Object} item 
-						 * @returns {Promise<Object>}
-						 */
-						const createStub = function(item) {
-							if (!options?.circular) return item;
-							if (!item || !item.ref) return item; // NOTE: Only stub those with "ref" as per the original filter
-							if (stubbed[item.ref] || created[item.ref]) return item;
-
-							//console.log('createStub', item.ref);
-							return Promise.resolve()
-								.then(() => mongoosy.models[item.collection].create([{}], {validateBeforeSave: false})) // Insert without validation (skips {required: true} specs)
-								.then(([created]) => {
-									//console.log('created.stub', item.ref, created._id);
-									lookup[item.ref] = created._id;
-									stubbed[item.ref] = true;
-								})
-								.then(() => {
-									//debug('Created', Object.keys(lookup).length, 'stubs');
-									//needed[item.ref] = scanDoc(item, lookup);
-									return item;
-								});
-						};
-
-
-						/**
-						 * Insert or Update a stub with complete document
-						 * 
-						 * @param {Object} item 
-						 * @returns {Promise<Object>}
-						 */
-						const updateStub = item => {
-							if (!item) return;
-							if (created[item.ref]) return item; // FIXME: Unable to lookup those without "ref"
-
-							//console.log('updateStub', item.ref);
-							return Promise.resolve()
-								.then(() => {
-									const needs = scanDoc(item.item, lookup);
-									if (needs.length > 0) {
-										//console.log('needs', item.collection, item.ref, needs, lookup);
-										needed[item.collection].push(...needs);
-										incomplete++;
-										return; // Cannot create at this stage
-									}
-									if (!mongoosy.models[item.collection]) throw new Error(`Cannot create item in non-existant or model "${item.collection}"`);
-				
-									if (stubbed[item.ref]) { // Item was stubbed in previous stage - update its content if we can
-										// NOTE: We can't use findByIdAndUpdate() (or similar) because they don't fire validators
-										//console.log('findById', item.collection, item.ref, lookup[item.ref]);
-										return mongoosy.models[item.collection].findById(lookup[item.ref])
-											.then(doc => {
-												if (!doc) throw new Error(`Document "${item.ref}" => "${lookup[item.ref]}" not found!`);
-
-												//console.log('lookup', item.ref, lookup[item.ref]);
-												//console.log('doc', doc);
-												//console.log('item', item);
-												Object.assign(doc, item.item);
-												return doc.save();
-											})
-											.then(()=> {
-												created[item.ref] = true;
-												stubbed[item.ref] = false;
-												needed[item.collection] = needed[item.collection].filter(n => !lookup[n])
-												if (options?.postCreate || options?.postStats) {
-													modelCounts[item.collection] = modelCounts[item.collection] ? ++modelCounts[item.collection] : 1;
-													if (settings.postCreate) settings.postCreate(item.collection, modelCounts[item.collection]);
-												}
-											})
-											.catch(e => {
-												debug('Error when updating stub doc', item.collection, 'using spec', item.item, 'Error:', e);
-												//if (e.code === 11000) ...
-												throw e;
-											});
-									} else {
-										return mongoosy.models[item.collection].insertOne(item.item)
-											.then(created => {
-												//console.log('created.insertOne', item.ref, created._id);
-												// Stash ID?
-												// NOTE: Only require a "created" state for items with "ref"
-												if (item.ref) {
-													lookup[item.ref] = created._id;
-													created[item.ref] = true;
-													stubbed[item.ref] = false;
-													needed[item.collection] = needed[item.collection].filter(n => !lookup[n])
-												}
-				
-												if (options?.postCreate || options?.postStats) {
-													modelCounts[item.collection] = modelCounts[item.collection] ? ++modelCounts[item.collection] : 1;
-													if (settings.postCreate) settings.postCreate(item.collection, modelCounts[item.collection]);
-												}
-											})
-											.catch(e => {
-												debug('Error when creating doc', item.collection, 'using spec', item.item, 'Error:', e);
-												throw e;
-											});
-									}
-								})
-								.then(() => {
-									//needed[item.ref] = scanDoc(item.item, lookup);
-									return item; // Finally return the item
-								});
-						};
-
-						//stream.on('readable', () => { // FIXME: Was triggering multiple times
-						debug('STAGE: Create/Updating documents', collection);
-
-						/**
-						 * Recursive function for reading incoming stream data in a stepwise manner
-						 * NOTE: This approach breaks down between "JSONStream" or "stream-json" and "createReadStream" due to various changes through stream versions
-						 */
-						/*
-						const readStream = () => {
-							try {
-								const data = stream.read();
-								console.log('readStream', data);
-								if (data === null) {
-									debug('Data complete');
-									return resolve();
+					return Promise.resolve()
+						// Handle scenarios which return a promise which readies and preprocesses a stream {{{
+						.then(() => {
+							return new Promise(resolve => {
+								if (_.isFunction(stream)) {
+									console.log('waiting for promise', collection);
+									Promise.resolve()
+										.then(() => stream())
+										.then(modifiedStream => resolve(modifiedStream));
+								} else {
+									console.log('waiting for readable', collection);
+									stream.once('readable', () => resolve(stream));
 								}
+							});
+						})
+						// }}}
+						// Stream writer // TODO: Encapsulate into it's own object with functions exposed as methods {{{
+						.then(readStream => {
+							return new Promise(resolve => {
+								let incomplete = 0;
 
-								Promise.resolve()
-									.then(() => mapItem(data))
-									.then(res => createStub(res))
-									.then(res => updateStub(res)) // FIXME: But we need to attempt missing ones from the whole list....
-									.catch(e => {
-										console.log('map.catch', e);
-										// TODO: reject promise?
-									})
-									.finally(() => {
-										setTimeout(() => {
-											readStream();
-										}); // Recurse
-									});
-							} catch(e) {
-								console.log('e', collection, stream, e);
-								debug('Data error');
-								return resolve();
-							}
-						};
-						*/
+								/**
+								 * Map an incoming item with reference and collection
+								 * 
+								 * @param {Object} item 
+								 * @returns {Object}
+								 */
+								const mapItem = function(item) {
+									//console.log('mapItem', item);
+									if (item.$ && !item.$.startsWith('$')) throw new Error(`All item '$' references must have a value that starts with '$' - given "${item.$}"`);
 
-						/**
-						 * Attempt at bypassing "read()" issues by using "data" events result in similar incompatibilities
-						 */
-						/*
-						stream.on('data', data => {
-							console.log('stream.data', data);
-							Promise.resolve()
-								.then(() => stream.pause())
-								.then(() => mapItem(data))
-								.then(res => createStub(res))
-								.then(res => updateStub(res)) // FIXME: But we need to attempt missing ones from the whole list....
-								.catch(e => {
-									console.log('map.catch', e);
-									// TODO: reject promise?
-								})
-								.finally(() => stream.resume());
-						});
-						*/
+									if (!needed[collection]) needed[collection] = [];
+									return {
+										ref: item.$,
+										collection,
+										item: _.omit(item, '$'),
+									};
+								};
 
-						console.log('waiting for readable', collection);
-						stream.once('readable', () => {
-							console.log('readable', collection);
-						});
 
-						/**
-						 * Implementing a writable stream to consume the readable and utilising the callback for "pause" seems robust
-						 */
-						let processed = 0;
-						const processingStream = new Stream.Writable({
-							write(items, encoding, callback) {
-								if (!_.isArray(items)) items = [items]; // FIXME: Ever passed anything other than an array?
+								/**
+								 * Create a stub document given an object
+								 * 
+								 * @param {Object} item 
+								 * @returns {Promise<Object>}
+								 */
+								const createStub = function(item) {
+									if (!options?.circular) return item;
+									if (!item || !item.ref) return item; // NOTE: Only stub those with "ref" as per the original filter
+									if (stubbed[item.ref] || created[item.ref]) return item;
 
-								Promise.all(
-									items.map(item => {
-										return Promise.resolve()
-											.then(() => mapItem(item))
-											.then(res => createStub(res))
-											.then(res => updateStub(res)) // FIXME: But we need to attempt missing ones from the whole list....
-											.catch(e => {
-												console.warn('Error processing item', item, e);
-												// TODO: reject promise?
-												//process.exit(1);
+									//console.log('createStub', item.ref);
+									return Promise.resolve()
+										.then(() => mongoosy.models[item.collection].create([{}], {validateBeforeSave: false})) // Insert without validation (skips {required: true} specs)
+										.then(([created]) => {
+											//console.log('created.stub', item.ref, created._id);
+											lookup[item.ref] = created._id;
+											stubbed[item.ref] = true;
+										})
+										.then(() => {
+											//debug('Created', Object.keys(lookup).length, 'stubs');
+											//needed[item.ref] = scanDoc(item, lookup);
+											return item;
+										});
+								};
+
+
+								/**
+								 * Insert or Update a stub with complete document
+								 * 
+								 * @param {Object} item 
+								 * @returns {Promise<Object>}
+								 */
+								const updateStub = item => {
+									if (!item) return;
+									if (created[item.ref]) return item; // FIXME: Unable to lookup those without "ref"
+
+									//console.log('updateStub', item.ref);
+									return Promise.resolve()
+										.then(() => {
+											const needs = scanDoc(item.item, lookup);
+											if (needs.length > 0) {
+												//console.log('needs', item.collection, item.ref, needs, lookup);
+												needed[item.collection].push(...needs);
+												incomplete++;
+												return; // Cannot create at this stage
+											}
+											if (!mongoosy.models[item.collection]) throw new Error(`Cannot create item in non-existant or model "${item.collection}"`);
+
+											if (stubbed[item.ref]) { // Item was stubbed in previous stage - update its content if we can
+												// NOTE: We can't use findByIdAndUpdate() (or similar) because they don't fire validators
+												//console.log('findById', item.collection, item.ref, lookup[item.ref]);
+												return mongoosy.models[item.collection].findById(lookup[item.ref])
+													.then(doc => {
+														if (!doc) throw new Error(`Document "${item.ref}" => "${lookup[item.ref]}" not found!`);
+
+														//console.log('lookup', item.ref, lookup[item.ref]);
+														//console.log('doc', doc);
+														//console.log('item', item);
+														Object.assign(doc, item.item);
+														return doc.save();
+													})
+													.then(()=> {
+														created[item.ref] = true;
+														stubbed[item.ref] = false;
+														needed[item.collection] = needed[item.collection].filter(n => !lookup[n])
+														if (options?.postCreate || options?.postStats) {
+															modelCounts[item.collection] = modelCounts[item.collection] ? ++modelCounts[item.collection] : 1;
+															if (settings.postCreate) settings.postCreate(item.collection, modelCounts[item.collection]);
+														}
+													})
+													.catch(e => {
+														debug('Error when updating stub doc', item.collection, 'using spec', item.item, 'Error:', e);
+														//if (e.code === 11000) ...
+														throw e;
+													});
+											} else {
+												return mongoosy.models[item.collection].insertOne(item.item)
+													.then(created => {
+														//console.log('created.insertOne', item.ref, created._id);
+														// Stash ID?
+														// NOTE: Only require a "created" state for items with "ref"
+														if (item.ref) {
+															lookup[item.ref] = created._id;
+															created[item.ref] = true;
+															stubbed[item.ref] = false;
+															needed[item.collection] = needed[item.collection].filter(n => !lookup[n])
+														}
+
+														if (options?.postCreate || options?.postStats) {
+															modelCounts[item.collection] = modelCounts[item.collection] ? ++modelCounts[item.collection] : 1;
+															if (settings.postCreate) settings.postCreate(item.collection, modelCounts[item.collection]);
+														}
+													})
+													.catch(e => {
+														debug('Error when creating doc', item.collection, 'using spec', item.item, 'Error:', e);
+														throw e;
+													});
+											}
+										})
+										.then(() => {
+											//needed[item.ref] = scanDoc(item.item, lookup);
+											return item; // Finally return the item
+										});
+								};
+
+
+								debug('STAGE: Create/Updating documents', collection);
+
+
+								/**
+								 * Implementing a writable stream to consume the readable and utilising the callback for "pause" seems robust
+								 */
+								let processed = 0;
+								const writeStream = new Stream.Writable({
+									write(items, encoding, callback) {
+										if (!_.isArray(items)) items = [items]; // FIXME: Ever passed anything other than an array?
+
+										//console.log('write', collection, items);
+
+										mongoosy.utils.promiseAllSeries(
+											items.map(item => () => {
+												return Promise.resolve()
+													.then(() => mapItem(item))
+													.then(res => createStub(res))
+													.then(res => updateStub(res)) // FIXME: But we need to attempt missing ones from the whole list....
+													.catch(e => {
+														console.warn('Error processing item', item, e);
+														// TODO: reject promise?
+														//process.exit(1);
+													})
+													.finally(() => {
+														if (++processed % 10000 === 0) debug(`Processed ${processed} items from "${collection}"`);
+													});
 											})
-											.finally(() => {
-												if (++processed % 500 === 0) debug(`Processed ${processed} items`);
-											});
-									})
-								).finally(() => callback());
-							},
-							objectMode: true
-						});
+										).finally(() => {
+											//console.log('write.finally', collection);
+											callback();
+										});
+									},
+									objectMode: true
+								});
 
-						processingStream.on('pipe', src => {
-							console.error('pipe', collection);
-						});
-						processingStream.on('unpipe', src => {
-							console.error('unpipe', collection);
-						});
+								writeStream.on('pipe', src => {
+									console.error('writer.pipe', collection);
+								});
+								writeStream.on('unpipe', src => {
+									console.error('writer.unpipe', collection);
+								});
+								writeStream.on('pause', src => {
+									console.error('writer.pause', collection);
+								});
+								writeStream.on('resume', src => {
+									console.error('writer.resume', collection);
+								});
+								writeStream.on('close', src => {
+									console.error('writer.close', collection);
+									resolve();
+								});
+								writeStream.on('end', src => {
+									console.error('writer.end', collection);
+								});
 
-						stream
-							.pipe(es.filterSync(item => (!item.$ || !created[item.$]))) // Remove items which have already been created
-							.pipe(processingStream);
+								// FIXME: Event happens, but only if earlier promies are resolved on reader.end
+								writeStream.on('finish', () => {
+									console.error('writer.finish', collection);
+									//resolve();
+								});
 
-						stream.on('close', () => {
-							console.log('stream.close', incomplete);
-							resolve();
-						});
+								readStream.on('close', () => {
+									console.log('reader.close', collection, incomplete);
+								});
 
-						stream.on('end', () => {
-							console.log('stream.end', incomplete);
-						});
+								readStream.on('end', () => {
+									console.log('reader.end', collection, incomplete);
+								});
 
-						stream.on('error', err => {
-							console.log('stream.error', err);
+								readStream.on('finish', () => {
+									console.log('reader.finish', collection, incomplete);
+								});
+
+								readStream.on('error', err => {
+									console.log('reader.error', collection, err);
+								});
+
+								readStream
+									.pipe(es.filterSync(item => (!item.$ || !created[item.$]))) // Remove items which have already been created
+									.pipe(writeStream);
+							});
 						});
-					});
 
 				})
+				// }}}
 			))
 			.then(() => blob);
 	};
@@ -514,18 +497,8 @@ module.exports = function MongoosyScenario(mongoosy, input, options) {
 								_.forEach(blob, (v, k) => {
 									if (!mongoosy.models[k]) throw new Error(`Unknown model "${k}" when prepairing to create scenario`);
 								});
-								//console.log('blob', blob);
 								return blob;
 							})
-							/*
-							.then(blob => {
-								if (disableIndexes) {
-									return disableIndexes(blob); // Only nuke items on first pass
-								} else {
-									return blob;
-								}
-							})
-							*/
 							.then(blob => processStreams(blob))
 					}))
 					.then(blob => {
