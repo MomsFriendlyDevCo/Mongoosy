@@ -206,7 +206,8 @@ module.exports = function MongoosyScenario(mongoosy, input, options) {
 			.then(streams => mongoosy.utils.promiseAllSeries(
 				_.flatMap(streams, (stream, collection) => () => {
 					// Skip collections which are not waiting on needed references
-					if (neededOnly && (!_.has(needed, collection) || needed[collection].length === 0)) return;
+					//console.log('check', collection, _.get(needed, collection, ''), neededOnly, (neededOnly && (!_.has(needed, collection) || needed[collection].length === 0)));
+					//if (neededOnly && (!_.has(needed, collection) || needed[collection].length === 0)) return;
 
 					debug('STAGE: Process', collection);
 					return Promise.resolve()
