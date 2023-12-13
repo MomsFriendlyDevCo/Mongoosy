@@ -35,6 +35,23 @@ module.exports = function MongoosyScenario(mongoosy, input, options) {
 		importer: path => {
 			return require(path);
 		},
+		/*
+		// NOTE: Import async module then get contents via callback
+		importer(path) {
+			const module = require(path);
+			if (_.isFunction(module)) {
+				return new Promise((resolve, reject) => {
+					module(function(err, contents) {
+						if (err) return reject(err);
+
+						resolve(contents);
+					});
+				});
+			} else {
+				return module;
+			}
+		},
+		*/
 		nuke: false,
 		threads: 3,
 		postRead: undefined,
@@ -127,8 +144,8 @@ module.exports = function MongoosyScenario(mongoosy, input, options) {
 	 */
 	const rebuildIndexes = () => {
 		debug('STAGE: Rebuild indexes')
-		return Promise.all(Object.keys(indexes)
-			.map(modelName => Promise.resolve()
+		return mongoosy.utils.promiseAllSeries(Object.keys(indexes)
+			.map(modelName => () => Promise.resolve()
 				.then(()=> debug(`Re-create indexes on db.${modelName}:`, indexes[modelName].map(i => i.name).join(', ')))
 				.then(()=> {
 					if (_.isArray(indexes[modelName]) && indexes[modelName].length > 0) {
@@ -147,20 +164,17 @@ module.exports = function MongoosyScenario(mongoosy, input, options) {
 	 * @returns {Object<Stream>}
 	 */
 	const convertStreams = blob => {
-		debug('STAGE: Converting data to streams');
-		//return Promise.resolve()
-		//	.then(() => {
-				return _.mapValues(blob, item => {
-					if (_.isFunction(item)) {
-						return item;
-					} else if (item instanceof Stream) {
-						return item;
-					} else {
-						const stream = Stream.Readable.from(item, { objectMode: true });
-						return stream;
-					}
-				});
-		//	});
+		//debug('STAGE: Converting data to streams');
+		return _.mapValues(blob, item => {
+			if (_.isFunction(item)) {
+				return item;
+			} else if (item instanceof Stream) {
+				return item;
+			} else {
+				const stream = Stream.Readable.from(item, { objectMode: true });
+				return stream;
+			}
+		});
 	};
 
 
@@ -197,12 +211,12 @@ module.exports = function MongoosyScenario(mongoosy, input, options) {
 						.then(() => {
 							return new Promise(resolve => {
 								if (_.isFunction(stream)) {
-									console.log('waiting for promise', collection);
+									//console.log('waiting for promise', collection);
 									Promise.resolve()
 										.then(() => stream())
 										.then(modifiedStream => resolve(modifiedStream));
 								} else {
-									console.log('waiting for readable', collection);
+									//console.log('waiting for readable', collection);
 									stream.once('readable', () => resolve(stream));
 								}
 							});
@@ -275,6 +289,8 @@ module.exports = function MongoosyScenario(mongoosy, input, options) {
 											const needs = scanDoc(item.item, lookup);
 											if (needs.length > 0) {
 												//console.log('needs', item.collection, item.ref, needs, lookup);
+
+												// TODO: Push unique needs
 												needed[item.collection].push(...needs);
 												incomplete++;
 												return; // Cannot create at this stage
@@ -375,6 +391,12 @@ module.exports = function MongoosyScenario(mongoosy, input, options) {
 									objectMode: true
 								});
 
+								writeStream.once('close', src => {
+									//console.error('writer.close', collection);
+									resolve();
+								});
+
+								/*
 								writeStream.on('pipe', src => {
 									console.error('writer.pipe', collection);
 								});
@@ -387,18 +409,13 @@ module.exports = function MongoosyScenario(mongoosy, input, options) {
 								writeStream.on('resume', src => {
 									console.error('writer.resume', collection);
 								});
-								writeStream.on('close', src => {
-									console.error('writer.close', collection);
-									resolve();
-								});
+
 								writeStream.on('end', src => {
 									console.error('writer.end', collection);
 								});
 
-								// FIXME: Event happens, but only if earlier promies are resolved on reader.end
 								writeStream.on('finish', () => {
 									console.error('writer.finish', collection);
-									//resolve();
 								});
 
 								readStream.on('close', () => {
@@ -416,6 +433,7 @@ module.exports = function MongoosyScenario(mongoosy, input, options) {
 								readStream.on('error', err => {
 									console.log('reader.error', collection, err);
 								});
+								*/
 
 								readStream
 									.pipe(es.filterSync(item => (!item.$ || !created[item.$]))) // Remove items which have already been created
@@ -437,10 +455,10 @@ module.exports = function MongoosyScenario(mongoosy, input, options) {
 	 */
 	const loadScenarios = () => {
 		return Promise.resolve()
-			.then(()=> Promise.all(_.castArray(input).map(item => {
+			.then(()=> mongoosy.utils.promiseAllSeries(_.castArray(input).map(item => () => {
 				if (_.isString(item)) {
 					return glob(item, options?.glob) // FIXME: Use "settings.glob"
-						.then(files => Promise.all(files.map(file => Promise.resolve()
+						.then(files => mongoosy.utils.promiseAllSeries(files.map(file => () => Promise.resolve()
 							.then(() => delete require.cache[require.resolve(file)]) // Force import to re-execute any initalisation
 							.then(()=> settings.importer(file))
 							.then(res => {
@@ -481,7 +499,7 @@ module.exports = function MongoosyScenario(mongoosy, input, options) {
 					return blob;
 				})
 				.then(blob => {
-					return Promise.all(blob.map(file => {
+					return mongoosy.utils.promiseAllSeries(blob.map(file => () => {
 						//console.log('file', file)
 						return Promise.resolve()
 							.then(() => file) // FIXME: Rename variables
@@ -515,6 +533,7 @@ module.exports = function MongoosyScenario(mongoosy, input, options) {
 						if (remaining > 0) {
 							debug('Leftover unresolvable / wanted IDs', remaining);
 							setTimeout(() => {
+								// TODO: Identify which collections need retrying and avoid reprocessing large files when not required
 								retrieveFilesInner();
 							}); // Recurse
 						} else {
