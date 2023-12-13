@@ -194,9 +194,10 @@ module.exports = function MongoosyScenario(mongoosy, input, options) {
 	 * Create and read streams from each key and create documents
 	 * 
 	 * @param {Object} blob Complete scenario object
+	 * @param {Boolean} [neededOnly=false] Process only those collections which were waiting on others
 	 * @returns {Promise<Object>}
 	 */
-	const processStreams = blob => {
+	const processStreams = (blob, neededOnly = false) => {
 		//debug('STAGE: Process streams');
 		// When not a stream, create one
 		return Promise.resolve()
@@ -204,8 +205,10 @@ module.exports = function MongoosyScenario(mongoosy, input, options) {
 			.then(() => blob) // TODO: Rename variables
 			.then(streams => mongoosy.utils.promiseAllSeries(
 				_.flatMap(streams, (stream, collection) => () => {
-					debug('STAGE: Process', collection);
+					// Skip collections which are not waiting on needed references
+					if (neededOnly && (!_.has(needed, collection) || needed[collection].length === 0)) return;
 
+					debug('STAGE: Process', collection);
 					return Promise.resolve()
 						// Handle scenarios which return a promise which readies and preprocesses a stream {{{
 						.then(() => {
@@ -482,11 +485,12 @@ module.exports = function MongoosyScenario(mongoosy, input, options) {
 	 */
 	const retrieveFiles = () => {
 		return new Promise(resolve => {
-
 			/**
 			 * Recursive function to enable reprocessing until no documents are missing
+			 * 
+			 * @param {Boolean} [neededOnly = false]
 			 */
-			const retrieveFilesInner = () => {
+			const retrieveFilesInner = (neededOnly = false) => {
 				debug('STAGE: Retrieving files for processing');
 				Promise.resolve()
 				.then(() => loadScenarios())
@@ -517,7 +521,7 @@ module.exports = function MongoosyScenario(mongoosy, input, options) {
 								});
 								return blob;
 							})
-							.then(blob => processStreams(blob))
+							.then(blob => processStreams(blob, neededOnly))
 					}))
 					.then(blob => {
 						console.log('needed', needed);
@@ -534,7 +538,7 @@ module.exports = function MongoosyScenario(mongoosy, input, options) {
 							debug('Leftover unresolvable / wanted IDs', remaining);
 							setTimeout(() => {
 								// TODO: Identify which collections need retrying and avoid reprocessing large files when not required
-								retrieveFilesInner();
+								retrieveFilesInner(true);
 							}); // Recurse
 						} else {
 							debug('Processing completed!');
