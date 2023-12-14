@@ -71,7 +71,9 @@ module.exports = function MongoosyScenario(mongoosy, input, options) {
 	const summary = {};
 
 	const processedScenarios = new Map();
-	const processedItems = new Map();
+	//const processedItems = new Map();
+
+	const processed = {};
 
 	/**
 	 * Deeply scan a document replacing all '$items' with their replacements
@@ -213,6 +215,10 @@ module.exports = function MongoosyScenario(mongoosy, input, options) {
 						return;
 					}
 
+					// Initalise per-tem tracking
+					if (!_.has(processed, scenarioIdx)) processed[scenarioIdx] = {};
+					if (!_.has(processed[scenarioIdx], collection)) processed[scenarioIdx][collection] = {};
+
 					debug(`STAGE: Process "${collection}" within scenario ${scenarioIdx}`);
 					return Promise.resolve()
 						// Handle scenarios which return a promise which readies and preprocesses a stream {{{
@@ -290,7 +296,12 @@ module.exports = function MongoosyScenario(mongoosy, input, options) {
 								const updateStub = (item, itemIdx) => {
 									if (!item) return;
 									if (created[item.ref]) return; // FIXME: Unable to lookup those without "ref"; Need to track items in a stream by their index
-									if (processedItems.get(`${scenarioIdx}.${item.collection}.${itemIdx}`) === true) return;
+
+									//if (processedItems.get(`${scenarioIdx}.${item.collection}.${itemIdx}`) === true) return;
+									if (processed[scenarioIdx][collection][itemIdx] === true) {
+										console.log('skip item', scenarioIdx, collection, itemIdx);
+										return;
+									}
 
 									//console.log('updateStub', item.ref);
 									return Promise.resolve()
@@ -304,10 +315,6 @@ module.exports = function MongoosyScenario(mongoosy, input, options) {
 												needed[item.collection].push(...needs);
 												needed[item.collection] = _.uniq(needed[item.collection]);
 												status[item.collection] += needs.length;
-												// TODO: When we have any missing items for a stream and collection within, only process those and skip all others
-												//missing.set(scenarioIdx, {
-												//	[item.collection]: [].push(itemIdx)
-												//});
 
 												return; // Cannot create at this stage
 											}
@@ -335,7 +342,9 @@ module.exports = function MongoosyScenario(mongoosy, input, options) {
 
 														if (!_.has(summary, item.collection)) summary[item.collection] = 0;
 														summary[item.collection]++;
-														processedItems.set(`${scenarioIdx}.${item.collection}.${itemIdx}`, true);
+
+														//processedItems.set(`${scenarioIdx}.${item.collection}.${itemIdx}`, true);
+														processed[scenarioIdx][collection][itemIdx] = true;
 
 														if (options?.postCreate || options?.postStats) {
 															if (settings.postCreate) settings.postCreate(item.collection, summary[item.collection]);
@@ -363,7 +372,9 @@ module.exports = function MongoosyScenario(mongoosy, input, options) {
 
 														if (!_.has(summary, item.collection)) summary[item.collection] = 0;
 														summary[item.collection]++;
-														processedItems.set(`${scenarioIdx}.${item.collection}.${itemIdx}`, true);
+
+														//processedItems.set(`${scenarioIdx}.${item.collection}.${itemIdx}`, true);
+														processed[scenarioIdx][collection][itemIdx] = true;
 
 														if (options?.postCreate || options?.postStats) {
 															if (settings.postCreate) settings.postCreate(item.collection, summary[item.collection]);
@@ -418,6 +429,11 @@ module.exports = function MongoosyScenario(mongoosy, input, options) {
 
 								writeStream.once('close', src => {
 									//console.error('writer.close', collection);
+									// Not waiting for any more items, we no longer need this RAM
+									if (status[collection] === 0) {
+										delete processed[scenarioIdx][collection];
+										processed[scenarioIdx][collection] = {};
+									}
 									resolve();
 								});
 
@@ -468,7 +484,9 @@ module.exports = function MongoosyScenario(mongoosy, input, options) {
 				})
 				// }}}
 			))
-			.then(() => processedScenarios.set(scenarioIdx, status)) // Save status so we can lookup which scenarios and collections require further passes
+			.then(() => {
+				processedScenarios.set(scenarioIdx, status);
+			}) // Save status so we can lookup which scenarios and collections require further passes
 			.then(() => status);
 	};
 
