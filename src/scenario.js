@@ -70,7 +70,8 @@ module.exports = function MongoosyScenario(mongoosy, input, options) {
 	const indexes = {};
 	const summary = {};
 
-	const processed = new Map();
+	const processedScenarios = new Map();
+	const processedItems = new Map();
 
 	/**
 	 * Deeply scan a document replacing all '$items' with their replacements
@@ -196,23 +197,23 @@ module.exports = function MongoosyScenario(mongoosy, input, options) {
 	 * Create and read streams from each key and create documents
 	 * 
 	 * @param {Object} scenario Complete scenario object
-	 * @param {Number} idx Index within scenario arrays (Used to track completion status for scenario and contained collections)
+	 * @param {Number} scenarioIdx Index within scenario arrays (Used to track completion status for scenario and contained collections)
 	 * @returns {Promise<Object>}
 	 */
-	const processScenario = (scenario, idx) => {
+	const processScenario = (scenario, scenarioIdx) => {
 		const status = {};
-		const prev = processed.get(idx);
+		const prev = processedScenarios.get(scenarioIdx);
 
 		//debug('STAGE: Process scenario');
 		return Promise.resolve()
 			.then(() => mongoosy.utils.promiseAllSeries(
 				_.flatMap(scenario, (stream, collection) => () => {
 					if (prev && _.has(prev, collection) && prev[collection] === 0) {
-						debug(`Skipping "${collection}" for scenario ${idx}` );
+						debug(`SKIP: Completed "${collection}" within scenario ${scenarioIdx}`);
 						return;
 					}
 
-					debug('STAGE: Process', collection);
+					debug(`STAGE: Process "${collection}" within scenario ${scenarioIdx}`);
 					return Promise.resolve()
 						// Handle scenarios which return a promise which readies and preprocesses a stream {{{
 						.then(() => {
@@ -283,11 +284,14 @@ module.exports = function MongoosyScenario(mongoosy, input, options) {
 								 * Insert or Update a stub with complete document
 								 * 
 								 * @param {Object} item 
+								 * @param {Object} itemIdx Index within the streaming array
 								 * @returns {Promise<Object>}
 								 */
-								const updateStub = item => {
+								const updateStub = (item, itemIdx) => {
 									if (!item) return;
 									if (created[item.ref]) return; // FIXME: Unable to lookup those without "ref"; Need to track items in a stream by their index
+									const isProcessed = processedItems.get(`${scenarioIdx}.${item.collection}.${itemIdx}`);
+									if (isProcessed) return;
 
 									//console.log('updateStub', item.ref);
 									return Promise.resolve()
@@ -301,10 +305,16 @@ module.exports = function MongoosyScenario(mongoosy, input, options) {
 												needed[item.collection].push(...needs);
 												needed[item.collection] = _.uniq(needed[item.collection]);
 												status[item.collection] += needs.length;
+												// TODO: When we have any missing items for a stream and collection within, only process those and skip all others
+												//missing.set(scenarioIdx, {
+												//	[item.collection]: [].push(itemIdx)
+												//});
+
 												return; // Cannot create at this stage
 											}
 
 											if (!mongoosy.models[item.collection]) throw new Error(`Cannot create item in non-existant or model "${item.collection}"`);
+
 
 											if (stubbed[item.ref]) { // Item was stubbed in previous stage - update its content if we can
 												// NOTE: We can't use findByIdAndUpdate() (or similar) because they don't fire validators
@@ -326,6 +336,7 @@ module.exports = function MongoosyScenario(mongoosy, input, options) {
 
 														if (!_.has(summary, item.collection)) summary[item.collection] = 0;
 														summary[item.collection]++;
+														processedItems.set(`${scenarioIdx}.${item.collection}.${itemIdx}`, true);
 
 														if (options?.postCreate || options?.postStats) {
 															if (settings.postCreate) settings.postCreate(item.collection, summary[item.collection]);
@@ -353,6 +364,7 @@ module.exports = function MongoosyScenario(mongoosy, input, options) {
 
 														if (!_.has(summary, item.collection)) summary[item.collection] = 0;
 														summary[item.collection]++;
+														processedItems.set(`${scenarioIdx}.${item.collection}.${itemIdx}`, true);
 
 														if (options?.postCreate || options?.postStats) {
 															if (settings.postCreate) settings.postCreate(item.collection, summary[item.collection]);
@@ -369,7 +381,7 @@ module.exports = function MongoosyScenario(mongoosy, input, options) {
 								};
 
 
-								debug('STAGE: Create/Updating documents', collection);
+								debug(`STAGE: Create/Updating documents "${collection}" within scenario ${scenarioIdx}`);
 
 
 								let cnt = 0;
@@ -383,18 +395,18 @@ module.exports = function MongoosyScenario(mongoosy, input, options) {
 										//console.log('write', cnt, collection);
 
 										mongoosy.utils.promiseAllSeries(
-											items.map(item => () => {
+											items.map((item, itemIdx) => () => {
 												return Promise.resolve()
 													.then(() => mapItem(item))
 													.then(res => createStub(res))
-													.then(res => updateStub(res)) // FIXME: But we need to attempt missing ones from the whole list....
+													.then(res => updateStub(res, itemIdx)) // FIXME: But we need to attempt missing ones from the whole list....
 													.catch(e => {
 														console.warn('Error processing item', item, e);
 														// TODO: reject promise?
 														//process.exit(1);
 													})
 													.finally(() => {
-														if (++cnt % 10000 === 0) debug(`Processed ${cnt} items from "${collection}"`);
+														if (++cnt % 10000 === 0) debug(`Processed ${cnt} items from "${collection}" within scenario ${scenarioIdx}`);
 													});
 											})
 										).finally(() => {
@@ -457,7 +469,7 @@ module.exports = function MongoosyScenario(mongoosy, input, options) {
 				})
 				// }}}
 			))
-			.then(() => processed.set(idx, status)) // Save status so we can lookup which scenarios and collections require further passes
+			.then(() => processedScenarios.set(scenarioIdx, status)) // Save status so we can lookup which scenarios and collections require further passes
 			.then(() => status);
 	};
 
