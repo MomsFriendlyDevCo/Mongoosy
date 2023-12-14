@@ -430,6 +430,7 @@ module.exports = function MongoosyScenario(mongoosy, input, options) {
 								writeStream.once('close', src => {
 									//console.error('writer.close', collection);
 									// Not waiting for any more items, we no longer need this RAM
+									// TODO: Only record needed? Is there any other reason to replay an item?
 									if (status[collection] === 0) {
 										delete processed[scenarioIdx][collection];
 										processed[scenarioIdx][collection] = {};
