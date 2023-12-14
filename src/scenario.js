@@ -391,7 +391,7 @@ module.exports = function MongoosyScenario(mongoosy, input, options) {
 									write(items, encoding, callback) {
 										if (!_.isArray(items)) items = [items]; // FIXME: Ever passed anything other than an array?
 
-										//console.log('write', cnt, collection);
+										//console.log('write', writeIdx, collection);
 
 										mongoosy.utils.promiseAllSeries(
 											items.map(item => () => {
@@ -405,7 +405,7 @@ module.exports = function MongoosyScenario(mongoosy, input, options) {
 														//process.exit(1);
 													})
 													.finally(() => {
-														if (++writeIdx % 10000 === 0) debug(`Processed ${cnt} items from "${collection}" within scenario ${scenarioIdx}`);
+														if (++writeIdx % 10000 === 0) debug(`Processed ${writeIdx} items from "${collection}" within scenario ${scenarioIdx}`);
 													});
 											})
 										).finally(() => {
