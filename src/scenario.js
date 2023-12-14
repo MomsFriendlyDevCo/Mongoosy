@@ -290,8 +290,7 @@ module.exports = function MongoosyScenario(mongoosy, input, options) {
 								const updateStub = (item, itemIdx) => {
 									if (!item) return;
 									if (created[item.ref]) return; // FIXME: Unable to lookup those without "ref"; Need to track items in a stream by their index
-									const isProcessed = processedItems.get(`${scenarioIdx}.${item.collection}.${itemIdx}`);
-									if (isProcessed) return;
+									if (processedItems.get(`${scenarioIdx}.${item.collection}.${itemIdx}`) === true) return;
 
 									//console.log('updateStub', item.ref);
 									return Promise.resolve()
@@ -384,7 +383,7 @@ module.exports = function MongoosyScenario(mongoosy, input, options) {
 								debug(`STAGE: Create/Updating documents "${collection}" within scenario ${scenarioIdx}`);
 
 
-								let cnt = 0;
+								let writeIdx = 0;
 								/**
 								 * Implementing a writable stream to consume the readable and utilising the callback for "pause" seems robust
 								 */
@@ -395,18 +394,18 @@ module.exports = function MongoosyScenario(mongoosy, input, options) {
 										//console.log('write', cnt, collection);
 
 										mongoosy.utils.promiseAllSeries(
-											items.map((item, itemIdx) => () => {
+											items.map(item => () => {
 												return Promise.resolve()
 													.then(() => mapItem(item))
 													.then(res => createStub(res))
-													.then(res => updateStub(res, itemIdx)) // FIXME: But we need to attempt missing ones from the whole list....
+													.then(res => updateStub(res, writeIdx)) // FIXME: But we need to attempt missing ones from the whole list....
 													.catch(e => {
 														console.warn('Error processing item', item, e);
 														// TODO: reject promise?
 														//process.exit(1);
 													})
 													.finally(() => {
-														if (++cnt % 10000 === 0) debug(`Processed ${cnt} items from "${collection}" within scenario ${scenarioIdx}`);
+														if (++writeIdx % 10000 === 0) debug(`Processed ${cnt} items from "${collection}" within scenario ${scenarioIdx}`);
 													});
 											})
 										).finally(() => {
