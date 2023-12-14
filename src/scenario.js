@@ -67,8 +67,10 @@ module.exports = function MongoosyScenario(mongoosy, input, options) {
 	const stubbed = {};
 	const needed = {};
 	const created = {};
-	const modelCounts = {};
 	const indexes = {};
+	const summary = {};
+
+	const processed = new Map();
 
 	/**
 	 * Deeply scan a document replacing all '$items' with their replacements
@@ -193,21 +195,22 @@ module.exports = function MongoosyScenario(mongoosy, input, options) {
 	/**
 	 * Create and read streams from each key and create documents
 	 * 
-	 * @param {Object} blob Complete scenario object
-	 * @param {Boolean} [neededOnly=false] Process only those collections which were waiting on others
+	 * @param {Object} scenario Complete scenario object
+	 * @param {Number} idx Index within scenario arrays (Used to track completion status for scenario and contained collections)
 	 * @returns {Promise<Object>}
 	 */
-	const processStreams = (blob, neededOnly = false) => {
-		//debug('STAGE: Process streams');
-		// When not a stream, create one
+	const processScenario = (scenario, idx) => {
+		const status = {};
+		const prev = processed.get(idx);
+
+		//debug('STAGE: Process scenario');
 		return Promise.resolve()
-			//.then(() => convertStreams(blob))
-			.then(() => blob) // TODO: Rename variables
-			.then(streams => mongoosy.utils.promiseAllSeries(
-				_.flatMap(streams, (stream, collection) => () => {
-					// Skip collections which are not waiting on needed references
-					//console.log('check', collection, _.get(needed, collection, ''), neededOnly, (neededOnly && (!_.has(needed, collection) || needed[collection].length === 0)));
-					//if (neededOnly && (!_.has(needed, collection) || needed[collection].length === 0)) return;
+			.then(() => mongoosy.utils.promiseAllSeries(
+				_.flatMap(scenario, (stream, collection) => () => {
+					if (prev && _.has(prev, collection) && prev[collection] === 0) {
+						debug(`Skipping "${collection}" for scenario ${idx}` );
+						return;
+					}
 
 					debug('STAGE: Process', collection);
 					return Promise.resolve()
@@ -229,7 +232,6 @@ module.exports = function MongoosyScenario(mongoosy, input, options) {
 						// Stream writer // TODO: Encapsulate into it's own object with functions exposed as methods {{{
 						.then(readStream => {
 							return new Promise(resolve => {
-								let incomplete = 0;
 
 								/**
 								 * Map an incoming item with reference and collection
@@ -285,20 +287,23 @@ module.exports = function MongoosyScenario(mongoosy, input, options) {
 								 */
 								const updateStub = item => {
 									if (!item) return;
-									if (created[item.ref]) return item; // FIXME: Unable to lookup those without "ref"
+									if (created[item.ref]) return; // FIXME: Unable to lookup those without "ref"; Need to track items in a stream by their index
 
 									//console.log('updateStub', item.ref);
 									return Promise.resolve()
 										.then(() => {
+											if (!_.has(status, item.collection)) status[item.collection] = 0;
 											const needs = scanDoc(item.item, lookup);
 											if (needs.length > 0) {
 												//console.log('needs', item.collection, item.ref, needs, lookup);
 
 												// TODO: Push unique needs
 												needed[item.collection].push(...needs);
-												incomplete++;
+												needed[item.collection] = _.uniq(needed[item.collection]);
+												status[item.collection] += needs.length;
 												return; // Cannot create at this stage
 											}
+
 											if (!mongoosy.models[item.collection]) throw new Error(`Cannot create item in non-existant or model "${item.collection}"`);
 
 											if (stubbed[item.ref]) { // Item was stubbed in previous stage - update its content if we can
@@ -317,11 +322,16 @@ module.exports = function MongoosyScenario(mongoosy, input, options) {
 													.then(()=> {
 														created[item.ref] = true;
 														stubbed[item.ref] = false;
-														needed[item.collection] = needed[item.collection].filter(n => !lookup[n])
+														needed[item.collection] = needed[item.collection].filter(n => !lookup[n]);
+
+														if (!_.has(summary, item.collection)) summary[item.collection] = 0;
+														summary[item.collection]++;
+
 														if (options?.postCreate || options?.postStats) {
-															modelCounts[item.collection] = modelCounts[item.collection] ? ++modelCounts[item.collection] : 1;
-															if (settings.postCreate) settings.postCreate(item.collection, modelCounts[item.collection]);
+															if (settings.postCreate) settings.postCreate(item.collection, summary[item.collection]);
 														}
+
+														return item;
 													})
 													.catch(e => {
 														debug('Error when updating stub doc', item.collection, 'using spec', item.item, 'Error:', e);
@@ -338,23 +348,23 @@ module.exports = function MongoosyScenario(mongoosy, input, options) {
 															lookup[item.ref] = created._id;
 															created[item.ref] = true;
 															stubbed[item.ref] = false;
-															needed[item.collection] = needed[item.collection].filter(n => !lookup[n])
+															needed[item.collection] = needed[item.collection].filter(n => !lookup[n]);
 														}
 
+														if (!_.has(summary, item.collection)) summary[item.collection] = 0;
+														summary[item.collection]++;
+
 														if (options?.postCreate || options?.postStats) {
-															modelCounts[item.collection] = modelCounts[item.collection] ? ++modelCounts[item.collection] : 1;
-															if (settings.postCreate) settings.postCreate(item.collection, modelCounts[item.collection]);
+															if (settings.postCreate) settings.postCreate(item.collection, summary[item.collection]);
 														}
+
+														return item;
 													})
 													.catch(e => {
 														debug('Error when creating doc', item.collection, 'using spec', item.item, 'Error:', e);
 														throw e;
 													});
 											}
-										})
-										.then(() => {
-											//needed[item.ref] = scanDoc(item.item, lookup);
-											return item; // Finally return the item
 										});
 								};
 
@@ -362,15 +372,15 @@ module.exports = function MongoosyScenario(mongoosy, input, options) {
 								debug('STAGE: Create/Updating documents', collection);
 
 
+								let cnt = 0;
 								/**
 								 * Implementing a writable stream to consume the readable and utilising the callback for "pause" seems robust
 								 */
-								let processed = 0;
 								const writeStream = new Stream.Writable({
 									write(items, encoding, callback) {
 										if (!_.isArray(items)) items = [items]; // FIXME: Ever passed anything other than an array?
 
-										//console.log('write', collection, items);
+										//console.log('write', cnt, collection);
 
 										mongoosy.utils.promiseAllSeries(
 											items.map(item => () => {
@@ -384,7 +394,7 @@ module.exports = function MongoosyScenario(mongoosy, input, options) {
 														//process.exit(1);
 													})
 													.finally(() => {
-														if (++processed % 10000 === 0) debug(`Processed ${processed} items from "${collection}"`);
+														if (++cnt % 10000 === 0) debug(`Processed ${cnt} items from "${collection}"`);
 													});
 											})
 										).finally(() => {
@@ -443,12 +453,12 @@ module.exports = function MongoosyScenario(mongoosy, input, options) {
 									.pipe(es.filterSync(item => (!item.$ || !created[item.$]))) // Remove items which have already been created
 									.pipe(writeStream);
 							});
-						});
-
+						})
 				})
 				// }}}
 			))
-			.then(() => blob);
+			.then(() => processed.set(idx, status)) // Save status so we can lookup which scenarios and collections require further passes
+			.then(() => status);
 	};
 
 
@@ -488,65 +498,50 @@ module.exports = function MongoosyScenario(mongoosy, input, options) {
 		return new Promise(resolve => {
 			/**
 			 * Recursive function to enable reprocessing until no documents are missing
-			 * 
-			 * @param {Boolean} [neededOnly = false]
 			 */
-			const retrieveFilesInner = (neededOnly = false) => {
+			const retrieveFilesInner = () => {
 				debug('STAGE: Retrieving files for processing');
 				Promise.resolve()
 				.then(() => loadScenarios())
-				.then(blob => {
-					//console.log('blob', blob)
-					blob = blob.map(file => {
-						//console.log('file', file);
-						return convertStreams(file)
-					});
-					return blob;
-				})
-				.then(blob => {
-					return mongoosy.utils.promiseAllSeries(blob.map(file => () => {
-						//console.log('file', file)
+				.then(scenarios => scenarios.map(scenario => convertStreams(scenario)))
+				.then(scenarios => {
+					return mongoosy.utils.promiseAllSeries(scenarios.map((scenario, idx) => () => {
+						// FIXME: Although we're not re-running completed scenarios, those which were waiting on items are. Need to track individual item creation status within a scenerio and stream
+
 						return Promise.resolve()
-							.then(() => file) // FIXME: Rename variables
-							.then(blob => {
-								if (!settings.postRead) return blob;
+							.then(() => {
+								if (!settings.postRead) return scenario;
 
 								// Call postRead and wait for response
 								return Promise.resolve()
-									.then(() => settings.postRead(blob))
-									.then(() => blob);
+									.then(() => settings.postRead(scenario))
+									.then(() => scenario);
 							})
-							.then(blob => {
-								_.forEach(blob, (v, k) => {
+							.then(scenario => {
+								_.forEach(scenario, (v, k) => {
 									if (!mongoosy.models[k]) throw new Error(`Unknown model "${k}" when prepairing to create scenario`);
 								});
-								return blob;
+								return scenario;
 							})
-							.then(blob => processStreams(blob, neededOnly))
+							.then(scenario => processScenario(scenario, idx));
 					}))
-					.then(blob => {
-						console.log('needed', needed);
-
-						const remaining = _.flatMap(needed, item => {
-							return item.length;
-						})
-						.reduce((acc, cur) => {
-							return acc + cur;
-						}, 0);
-						debug('')
-
-						if (remaining > 0) {
-							debug('Leftover unresolvable / wanted IDs', remaining);
-							setTimeout(() => {
-								// TODO: Identify which collections need retrying and avoid reprocessing large files when not required
-								retrieveFilesInner(true);
-							}); // Recurse
-						} else {
-							debug('Processing completed!');
-							resolve(blob);
-						}
-					});
 				})
+				.then(() => {
+					//console.log('needed', needed);
+
+					const remaining = _.flatMap(needed, item => item.length).reduce((acc, cur) => acc + cur, 0);
+					debug('');
+
+					if (remaining > 0) {
+						debug('Leftover unresolvable / wanted IDs', remaining);
+						setTimeout(() => {
+							retrieveFilesInner();
+						}); // Recurse
+					} else {
+						debug('Processing completed!');
+						resolve();
+					}
+				});
 				// TODO: catch and reject outer promise
 			};
 
@@ -570,13 +565,13 @@ module.exports = function MongoosyScenario(mongoosy, input, options) {
 
 	return retrieveFiles()
 		.then(() => {
-			if (!settings.circular || !settings.circularIndexDisable) return {modelCounts}; // Skip index manipulation if disabled
+			if (!settings.circular || !settings.circularIndexDisable) return {summary}; // Skip index manipulation if disabled
 
 			return rebuildIndexes()
-				.then(()=> ({modelCounts}));
+				.then(()=> ({summary}));
 		})
-		.then(({modelCounts}) => {
-			debug('STAGE: Finish', modelCounts);
-			if (settings.postStats) settings.postStats(modelCounts)
+		.then(({summary}) => {
+			debug('STAGE: Finish', summary);
+			if (settings.postStats) settings.postStats(summary)
 		});
 };
