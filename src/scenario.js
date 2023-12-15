@@ -108,7 +108,7 @@ module.exports = function MongoosyScenario(mongoosy, input, options) {
 	 * @returns {Promise<Object>}
 	 */
 	const disableIndexes = collections => {
-		debug('STAGE: Disabling Indexes');
+		debug('STAGE: Disabling indexes for collections', (_.isArray(collections)) ? collections.join(',') : '');
 		return mongoosy.utils.promiseAllSeries(
 			collections.map(m => () => Promise.resolve()
 				.then(()=> {
@@ -127,8 +127,8 @@ module.exports = function MongoosyScenario(mongoosy, input, options) {
 					return Promise.resolve()
 						.then(()=> mongoosy.models[m].syncIndexes({background: false})) // Let Mongoosy catch up to index spec
 						.then(()=> mongoosy.models[m].listIndexes())
-						.then(indexes => {
-							indexes[m] = indexes.filter(index => !_.isEqual(index.key, {_id: 1})) // Ignore meta _id field
+						.then(res => {
+							indexes[m] = res.filter(index => !_.isEqual(index.key, {_id: 1})) // Ignore meta _id field
 							debug(`Will drop indexes on db.${m}:`, indexes[m].map(i => i.name).join(', '));
 
 							// Tell the mongo driver to drop the indexes we don't care about
@@ -148,13 +148,13 @@ module.exports = function MongoosyScenario(mongoosy, input, options) {
 	 * @returns {Promise}
 	 */
 	const rebuildIndexes = () => {
-		debug('STAGE: Rebuild indexes')
+		debug('STAGE: Rebuild indexes for collections', (_.isObject(indexes)) ? Object.keys(indexes).join(',') : '');
 		return mongoosy.utils.promiseAllSeries(Object.keys(indexes)
 			.map(modelName => () => Promise.resolve()
 				.then(()=> debug(`Re-create indexes on db.${modelName}:`, indexes[modelName].map(i => i.name).join(', ')))
 				.then(()=> {
 					if (_.isArray(indexes[modelName]) && indexes[modelName].length > 0) {
-						mongoosy.models[modelName].collection.createIndexes(indexes[modelName]);
+						return mongoosy.models[modelName].collection.createIndexes(indexes[modelName]);
 					}
 				})
 			)
