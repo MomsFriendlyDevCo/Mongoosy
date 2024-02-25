@@ -1,6 +1,6 @@
 {
   "name": "@momsfriendlydevco/mongoosy",
-  "version": "1.5.4",
+  "version": "1.6.6",
   "description": "Wrapper for Mongoose that adds some additional functionality",
   "main": "src/mongoosy.js",
   "repository": {
@@ -27,6 +27,7 @@
   "dependencies": {
     "@momsfriendlydevco/eventer": "^1.6.1",
     "debug": "^4.3.4",
+    "event-stream": "^4.0.1",
     "globby": "^11.0.2",
     "lodash": "^4.17.21",
     "mongoose": "^6.0.8",

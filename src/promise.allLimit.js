@@ -16,15 +16,17 @@
 *   }))
 * )
 */
-module.exports = (limit, promises) => new Promise((resolve, reject) => {
+module.exports = Promise.allLimit = (limit, promises) => new Promise((resolve, reject) => {
 	if (!isFinite(limit)) throw new Error('First parameter must be the number of promise threads');
 
 	var promiseChecker = function(queue) {
 		if (!queue.promisesRemaining.length && queue.running == 0) return resolve(queue.output);
 
 		while (queue.promisesRemaining.length > 0 && queue.running < queue.limit) {
-			(function(thisPromise, promiseIndex) {
+			var promiseRunner = function(thisPromise, promiseIndex) {
 				queue.running++;
+				if (typeof thisPromise != 'function') throw new Error('Called with a non-promise wrapper - all promise.allLimit items must be promise factories');
+
 				Promise.resolve(thisPromise())
 					.then(res => {
 						queue.output[promiseIndex] = res;
@@ -35,7 +37,7 @@ module.exports = (limit, promises) => new Promise((resolve, reject) => {
 						promiseChecker(queue);
 					})
 					.catch(reject);
-			})(queue.promisesRemaining.shift(), queue.promiseIndex++);
+			}(queue.promisesRemaining.shift(), queue.promiseIndex++);
 		}
 	};
 
