@@ -180,7 +180,9 @@ module.exports = function MongoosyTextIndex(model, options) {
 	* @param {Number|String} [options.skip] Number of records to skip
 	* @param {Number|String} [options.limit] Number of records to limit by
 	* @param {String} [options.scoreField="_score"] Append the search score as this field, set to falsy to disable.
-	* @param {Boolean} [options.sortByScore=true] Sort results by the score, descending
+	* @param {Boolean} [options.sortScoreFuzzy=true] Use score sorting when in fuzzy mode, otherwise use the `sort` method
+	* @param {Boolean|Function} [options.sort='$score'] How to sort results. Use the meta `$score' field to sort by the search score. If a function this is run as `(terms, settings)` and expected to return the final search field
+	* @param {Number} [options.sortOrder=1] Order with which to sort regular results, `1` for ascending, -1 for reversed
 	* @param {Boolean} [options.count=false] Return only the count of matching documents, optimizing various parts of the search functionality
 	* @param {Boolean} [options.tags=true] Whether to process specified tags. If falsy tag contents are ignored and removed from the term
 	* @param {RegExp} [options.tagsRe] RegExp used to split tags
@@ -195,7 +197,9 @@ module.exports = function MongoosyTextIndex(model, options) {
 			limit: false,
 			count: false,
 			scoreField: '_score',
-			sortByScore: true,
+			sortScoreFuzzy: true,
+			sort: null,
+			sortOrder: -1,
 			searchPaths: {wildcard: '*'},
 			..._.cloneDeep(settings),
 			...options,
@@ -289,10 +293,15 @@ module.exports = function MongoosyTextIndex(model, options) {
 				// }}}
 
 				// $sort - Sort by score (if searchSettings.sortByScore) {{{
-				if (searchSettings.scoreField && searchSettings.sortByScore && fuzzy && searchSettings.method == '$text')
+				if (searchSettings.scoreField && searchSettings.sortScoreFuzzy && fuzzy && searchSettings.method == '$text') {
 					agg.push({$sort: {
 						[searchSettings.scoreField]: -1,
 					}});
+				} else if (searchSettings.sort) {
+					agg.push({$sort: {
+						[searchSettings.sort]: searchSettings.sortOrder,
+					}});
+				}
 				// }}}
 
 				// $project - Select specific fields (if searchSettings.select) {{{
