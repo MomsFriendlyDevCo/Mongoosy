@@ -272,11 +272,6 @@ module.exports = function MongoosyTextIndex(model, options) {
 						|| Array.isArray(searchSettings.select) && searchSettings.select.length > 0
 					)
 				) {
-					console.log('GLUE SCORE?', {
-						scoreField: searchSettings.scoreField,
-						sortScoreFuzzy: searchSettings.sortScoreFuzzy,
-						fuzzy,
-					});
 					agg.push({$project: _(searchSettings.select)
 						.thru(v => typeof v == 'string' ? v.split(/\s*,\s*/) : v)
 						.map(v => [v, 1])
