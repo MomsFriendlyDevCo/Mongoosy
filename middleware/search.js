@@ -264,6 +264,43 @@ module.exports = function MongoosyTextIndex(model, options) {
 				}
 				// }}}
 
+				// $project - Select specific fields (if searchSettings.select) {{{
+				if (
+					searchSettings.select
+					&& (
+						typeof searchSettings.select == 'string'
+						|| Array.isArray(searchSettings.select) && searchSettings.select.length > 0
+					)
+				) {
+					console.log('GLUE SCORE?', {
+						scoreField: searchSettings.scoreField,
+						sortScoreFuzzy: searchSettings.sortScoreFuzzy,
+						fuzzy,
+					});
+					agg.push({$project: _(searchSettings.select)
+						.thru(v => typeof v == 'string' ? v.split(/\s*,\s*/) : v)
+						.map(v => [v, 1])
+						.thru(v => [
+							...v,
+							...(searchSettings.scoreField && searchSettings.sortScoreFuzzy && fuzzy // Append search score field if we're sorting by it later
+								? [[searchSettings.scoreField, {
+									$meta: searchSettings.method == '$text' ? 'textScore' : 'searchScore',
+								}]]
+								: []
+							),
+						])
+						.fromPairs()
+						.value()
+					});
+				} else if (searchSettings.scoreField && searchSettings.sortScoreFuzzy && fuzzy) { // No specific fields requested - glue in the score field if its required
+					agg.push({$addFields: {
+						[searchSettings.scoreField]: {
+							$meta: searchSettings.method == '$text' ? 'textScore' : 'searchScore',
+						},
+					}});
+				}
+				// }}}
+
 				// $match - searchSettings.match {{{
 				if (searchSettings.match && !_.isEmpty(searchSettings.match))
 					agg.push({$match: searchSettings.match});
@@ -282,15 +319,6 @@ module.exports = function MongoosyTextIndex(model, options) {
 				}
 				// }}}
 
-				// $addFields - Project score field (if searchSettings.scoreField) {{{
-				if (searchSettings.scoreField && fuzzy)
-					agg.push({$addFields: {
-						[searchSettings.scoreField]: {
-							$meta: searchSettings.method == '$text' ? 'textScore' : 'searchScore',
-						},
-					}});
-				// }}}
-
 				// $sort - Sort by score (if searchSettings.sortByScore) {{{
 				if (searchSettings.scoreField && searchSettings.sortScoreFuzzy && fuzzy) {
 					agg.push({$sort: {
@@ -305,22 +333,6 @@ module.exports = function MongoosyTextIndex(model, options) {
 						[searchSettings.sort]: 1,
 					}});
 				}
-				// }}}
-
-				// $project - Select specific fields (if searchSettings.select) {{{
-				if (
-					searchSettings.select
-					&& (
-						typeof searchSettings.select == 'string'
-						|| Array.isArray(searchSettings.select) && searchSettings.select.length > 0
-					)
-				)
-					agg.push({$project: _(searchSettings.select)
-						.thru(v => typeof v == 'string' ? v.split(/\s*,\s*/) : v)
-						.map(v => [v, 1])
-						.fromPairs()
-						.value()
-					});
 				// }}}
 
 				// $skip (if searchSettings.skip) {{{
