@@ -103,12 +103,19 @@ module.exports = function MongoosyRest(mongoosy, options) {
 			throw new Error('Unspecified model type when creating ReST middleware');
 		}
 
+		// FIXME: Anything ever happen fast enough for this to race during initialisation?
+		// Retrieving schema so input parsing can be validated
+		let meta;
+		model.meta().then(metares => meta = metares);
+
 		var removeMetaParams = query => _.omit(query, ['limit', 'select', 'skip', 'sort']);
 		var attemptParse = query => {
 			let res = {};
 			for (let k in query) {
 				try {
 					res[k] = JSON.parse(query[k]);
+					// If parsing has cast a string into a number yet the schema tells us this key is not a number, do not use the parsed version
+					if (_.isNumber(res[k]) && _.has(meta, [k, 'type']) && meta[k].type !== 'number') res[k] = query[k];
 				} catch(e) {
 					//debug('attemptParse.catch', e);
 					res[k] = query[k];
