@@ -30,7 +30,7 @@
     "event-stream": "^4.0.1",
     "globby": "^11.0.2",
     "lodash": "^4.17.21",
-    "mongoose": "^6.0.8",
+    "mongoose": "^7.8.9",
     "string-split-by": "^1.0.0"
   },
   "devDependencies": {
