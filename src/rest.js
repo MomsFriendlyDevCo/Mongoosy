@@ -108,7 +108,7 @@ module.exports = function MongoosyRest(mongoosy, options) {
 		let meta;
 		model.meta().then(metares => meta = metares);
 
-		var removeMetaParams = query => _.omit(query, ['limit', 'select', 'skip', 'sort']);
+		var removeMetaParams = query => _.omit(query, ['limit', 'populate', 'select', 'skip', 'sort']);
 		var attemptParse = query => {
 			let res = {};
 			for (let k in query) {
@@ -270,6 +270,7 @@ module.exports = function MongoosyRest(mongoosy, options) {
 							.catch(()=> res.sendStatus(400));
 
 						case 'get': return targetDoc
+							.populate(req.query.populate ? req.query.populate.split(/[\s\,]+/).join(' ') : undefined)
 							.select(req.query.select ? req.query.select.split(/[\s\,]+/).join(' ') : undefined)
 							.then(doc => {
 								if (doc) return docMap(doc, req);
@@ -279,6 +280,7 @@ module.exports = function MongoosyRest(mongoosy, options) {
 							.catch(()=> res.sendStatus(404));
 
 						case 'query': return model.find(attemptParse(removeMetaParams(req.query)))
+							.populate(req.query.populate ? req.query.populate.split(/[\s\,]+/).join(' ') : undefined)
 							.select(req.query.select ? req.query.select.split(/[\s\,]+/).join(' ') : undefined)
 							.sort(req.query.sort)
 							.limit(req.query.limit ? parseInt(req.query.limit) : undefined)
@@ -288,7 +290,7 @@ module.exports = function MongoosyRest(mongoosy, options) {
 
 						case 'search': return model.search(req.query[settings.searchParam], {
 								match: removeMetaParams(_.omit(req.query, settings.searchParam)),
-								..._.pick(req.query, ['limit', 'select', 'skip', 'sort']),
+								..._.pick(req.query, ['limit', 'populate', 'select', 'skip', 'sort']),
 							})
 							.then(docs => Promise.all(docs.map(doc => docMap(doc, req))))
 							.catch(e => settings.errorHandler(res, 400, e))
