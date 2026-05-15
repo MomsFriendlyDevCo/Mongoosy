@@ -264,7 +264,11 @@ module.exports = function MongoosyRest(mongoosy, options) {
 								: model.countDocuments(filter)
 							)
 							.then(count => ({count}))
-							.catch(()=> res.sendStatus(400));
+							.catch(e=> {
+								debug(`Failed to perform count - ${e.toString()}`);
+								console.log(e);
+								res.sendStatus(400);
+							});
 
 						case 'meta': return Promise.resolve(model.meta({custom: settings.metaCustomFields}))
 							.catch(()=> res.sendStatus(400));
